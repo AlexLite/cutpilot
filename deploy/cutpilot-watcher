@@ -32,7 +32,8 @@ state_file(){ printf '%s/%s' "$STABLE_DIR" "$(printf '%s' "$1" | sha256sum | awk
 progress_file(){ printf '%s/%s.%s.progress' "$PROGRESS_DIR" "$(basename "$1")" "$(printf '%s' "$1" | sha256sum | awk '{print $1}')"; }
 cancel_file(){ printf '%s.cancel' "$1"; }
 write_progress(){
-  local file=$1 status=$2 message=${3:-} temporary="${file}.tmp.$$"
+  local file=$1 status=$2 message=${3:-} temporary
+  temporary="${file}.tmp.$$"
   {
     printf 'status=%s\n' "$status"
     printf 'message=%s\n' "$message"
@@ -175,7 +176,7 @@ validate_output(){
 }
 
 remux(){
-  local input=$1 output=$2 temporary="${output}.tmp.$$.$RANDOM.remux"
+  local input=$1 output=$2 temporary="${output}.tmp.$$.$RANDOM.${output##*.}"
   log "Remuxing[$WORKER_MODE]: $(basename "$input") -> $(basename "$output")"
   if ffmpeg -nostdin -hide_banner -loglevel error -xerror -y -i "$input" \
       -map 0 -c copy -map_metadata 0 -map_chapters 0 "$temporary" \
