@@ -35,7 +35,7 @@ async function loadJobs() {
     const name = document.createElement('span');
     name.textContent = job.source;
     const state = document.createElement('small');
-    state.textContent = job.status === 'completed' ? `готово: ${job.message}` : job.status === 'failed' ? `ошибка: ${job.message}` : 'обрабатывается';
+    state.textContent = job.status === 'completed' ? `готово: ${job.message}` : job.status === 'failed' ? `ошибка: ${job.message}` : (job.progress ? `обрабатывается: ${job.progress}%` : 'обрабатывается');
     item.append(name, state);
     return item;
   }));

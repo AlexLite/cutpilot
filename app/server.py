@@ -87,14 +87,28 @@ class CutPilotService:
                     key, separator, value = line.partition("=")
                     if separator:
                         values[key] = value
+                ffmpeg_progress = path.with_name(path.name + ".ffmpeg")
+                if ffmpeg_progress.is_file():
+                    for line in ffmpeg_progress.read_text(encoding="utf-8", errors="replace").splitlines():
+                        key, separator, value = line.partition("=")
+                        if separator:
+                            values[key] = value
                 name = path.name.rsplit(".", 2)[0]
                 status = values.get("status", "processing")
+                progress = ""
+                try:
+                    duration = float(values.get("duration", "0") or 0)
+                    out_time = float(values.get("out_time_ms", "0") or 0)
+                except ValueError:
+                    duration = out_time = 0
+                if duration > 0 and out_time >= 0:
+                    progress = str(min(100, max(0, round(out_time / 1_000_000 / duration * 100))))
                 result.append({
                     "source": name,
                     "status": status,
                     "message": values.get("message", ""),
                     "updated_at": int(values.get("updated_at", "0") or 0),
-                    "progress": values.get("progress", ""),
+                    "progress": progress,
                     "out_time_ms": values.get("out_time_ms", ""),
                 })
             except OSError:

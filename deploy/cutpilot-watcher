@@ -36,6 +36,7 @@ write_progress(){
     printf 'status=%s\n' "$status"
     printf 'message=%s\n' "$message"
     printf 'updated_at=%s\n' "$(date +%s)"
+    [[ "${SRC_DURATION:-}" =~ ^[0-9.]+$ ]] && printf 'duration=%s\n' "$SRC_DURATION"
   } > "$temporary" && mv -f "$temporary" "$file"
 }
 
@@ -264,7 +265,7 @@ encode(){
   [[ "$VIDEO_CODEC" == hevc ]] && { codec=hevc; profile=main; level=5.1; } || { codec=h264; profile=high; level=5.1; }
   # The worker loop owns stdin (it feeds find output to read). Prevent FFmpeg
   # from interpreting that stream as its interactive command console.
-  local -a common=(-nostdin -hide_banner -loglevel error -nostats -progress "$PROGRESS_FILE" -xerror -y -i "$input")
+  local -a common=(-nostdin -hide_banner -loglevel error -nostats -progress "${PROGRESS_FILE}.ffmpeg" -xerror -y -i "$input")
   (( NO_LOGO )) || common+=(-i "$ACTIVE_LOGO")
   [[ -n "$TAIL_TRIM" ]] && common+=(-t "$TAIL_TRIM")
   common+=(-filter_complex "$FILTER" -map '[v]')
@@ -312,6 +313,7 @@ process_file(){
   write_progress "$PROGRESS_FILE" processing "$name"
   parse_commands "$base" || { write_error "$input" "$CMD_ERROR"; return 0; }
   probe_video "$input" || { write_error "$input" "Cannot read video parameters"; write_progress "$PROGRESS_FILE" failed "Cannot read video parameters"; return 0; }
+  write_progress "$PROGRESS_FILE" processing "$name"
   validate_audio "$input" || { write_error "$input" "Input audio is invalid or the file is still being copied"; write_progress "$PROGRESS_FILE" failed "Input audio is invalid or the file is still being copied"; return 0; }
   prepare_edit || { write_error "$input" "$CMD_ERROR"; write_progress "$PROGRESS_FILE" failed "$CMD_ERROR"; return 0; }
   [[ -n "$OUT_CONTAINER" ]] && out_ext=$OUT_CONTAINER || out_ext=${ext,,}
