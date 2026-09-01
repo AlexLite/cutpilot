@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import re
 import secrets
+import subprocess
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
@@ -16,6 +17,7 @@ from typing import Any
 from .ai import AIProviderError, OpenRouterAdapter
 from .commands import CommandValidationError, ValidatedPlan, validate_plan
 from .jobs import JobError, handoff, list_sources, source_metadata
+from .media import probe_media
 from .rules import simple_plan
 from .storage import PlanStore
 
@@ -137,7 +139,12 @@ class CutPilotService:
         if raw is not None:
             logger.info("Using local rule plan: task=%r plan=%r", normalized_task, raw)
         else:
-            raw = self.ai.create_plan(selected.name, {"size_bytes": selected.size}, normalized_task)
+            metadata: dict[str, Any] = {"size_bytes": selected.size}
+            try:
+                metadata.update(probe_media(self.ai_cut_directory / selected.name))
+            except (OSError, StopIteration, TypeError, ValueError, subprocess.SubprocessError) as exc:
+                logger.warning("Media probe unavailable for %s: %s", selected.name, exc)
+            raw = self.ai.create_plan(selected.name, metadata, normalized_task)
         raw = _correct_edit_intent(raw, task.strip())
         raw = _correct_logo_intent(raw, task.strip())
         try:

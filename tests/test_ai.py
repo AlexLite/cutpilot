@@ -25,7 +25,7 @@ class AIAdapterTests(unittest.TestCase):
         payload = json.loads(request.data)
         user = json.loads(payload["messages"][1]["content"])
         self.assertEqual(result, {"commands": [], "summary": "ok"})
-        self.assertEqual(user, {"n": "clip.mov", "b": 123, "t": "сделать MP4"})
+        self.assertEqual(user, {"n": "clip.mov", "m": {"size_bytes": 123}, "t": "сделать MP4"})
         self.assertEqual(payload["max_tokens"], 160)
 
 

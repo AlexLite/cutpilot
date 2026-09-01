@@ -38,7 +38,7 @@ class OpenRouterAdapter:
             "summary <=160 characters."
         )
         user = json.dumps(
-            {"n": source_filename, "b": metadata.get("size_bytes"), "t": task},
+            {"n": source_filename, "m": metadata, "t": task},
             ensure_ascii=False,
             separators=(",", ":"),
         )
