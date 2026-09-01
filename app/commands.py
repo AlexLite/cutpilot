@@ -129,6 +129,11 @@ def validate_commands(commands: object) -> tuple[str, ...]:
             if not 1 <= fps <= 60:
                 raise CommandValidationError("FPS must be between 1 and 60")
         elif re.fullmatch(r"-[1-9][0-9]*(?:gb|mb)", command):
+            number = int(command[1:-2])
+            unit = command[-2:]
+            size_bytes = number * (1_000_000_000 if unit == "gb" else 1_000_000)
+            if not 1_000_000 <= size_bytes <= 2_000_000_000_000:
+                raise CommandValidationError("Target size must be between 1mb and 2000gb")
             pass
         else:
             raise CommandValidationError(f"Unknown CutPilot command: {command}")

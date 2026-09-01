@@ -1,12 +1,16 @@
 import unittest
 
-from app.commands import validate_plan
+from app.commands import CommandValidationError, validate_plan
 
 
 class CommandNormalizationTests(unittest.TestCase):
     def test_normalizes_seconds_shorthand_from_ai(self):
         plan = validate_plan("clip.mp4", {"commands": ["-crp-0-10"], "summary": "cut"})
         self.assertEqual(plan.commands, ("-crp-00.00-00.10",))
+
+    def test_rejects_unbounded_target_size(self):
+        with self.assertRaises(CommandValidationError):
+            validate_plan("clip.mp4", {"commands": ["-9999999gb"], "summary": "bad"})
 
 
 if __name__ == "__main__":
