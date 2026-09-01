@@ -80,8 +80,8 @@ class JobTests(unittest.TestCase):
             ai_cut.mkdir()
             (ai_cut / "sample.mp4").write_bytes(b"video")
             service = CutPilotService(FakeAI(), ai_cut, root / "cutpilot")
-            plan = service.create_plan("sample.mp4", "обработать")
             service.PENDING_TTL_SECONDS = 0
+            plan = service.create_plan("sample.mp4", "обработать")
             with self.assertRaises(JobError):
                 service.confirm(plan["plan_id"], True)
 

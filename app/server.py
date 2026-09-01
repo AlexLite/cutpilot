@@ -9,8 +9,6 @@ import os
 from pathlib import Path
 import re
 import secrets
-import threading
-import time
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
@@ -18,6 +16,7 @@ from typing import Any
 from .ai import AIProviderError, OpenRouterAdapter
 from .commands import CommandValidationError, ValidatedPlan, validate_plan
 from .jobs import JobError, handoff, list_sources, source_metadata
+from .storage import PlanStore
 
 logger = logging.getLogger("cutpilot.server")
 
@@ -67,14 +66,8 @@ class CutPilotService:
         self.ai = ai or OpenRouterAdapter()
         self.ai_cut_directory = Path(ai_cut_directory or os.environ.get("CUTPILOT_AI_CUT_DIRECTORY", "/srv/cutpilot/AI_Cut"))
         self.cutpilot_directory = Path(cutpilot_directory or os.environ.get("CUTPILOT_DIRECTORY", "/srv/cutpilot"))
-        self.pending: dict[str, tuple[ValidatedPlan, Any, float]] = {}
-        self.pending_lock = threading.Lock()
-
-    def _purge_pending(self, now: float | None = None) -> None:
-        cutoff = (time.monotonic() if now is None else now) - self.PENDING_TTL_SECONDS
-        for plan_id, (_, _, created_at) in list(self.pending.items()):
-            if created_at < cutoff:
-                self.pending.pop(plan_id, None)
+        db_path = Path(os.environ.get("CUTPILOT_DB_PATH", str(self.cutpilot_directory / "cutpilot.db")))
+        self.store = PlanStore(db_path)
 
     def files(self) -> list[dict[str, Any]]:
         return [
@@ -99,11 +92,7 @@ class CutPilotService:
             logger.exception("AI plan validation failed: source=%s raw=%r", selected.name, raw)
             raise
         plan_id = secrets.token_urlsafe(24)
-        with self.pending_lock:
-            self._purge_pending()
-            if len(self.pending) >= 100:
-                self.pending.clear()
-            self.pending[plan_id] = (plan, selected, time.monotonic())
+        self.store.save(plan_id, plan, selected, self.PENDING_TTL_SECONDS)
         return {"plan_id": plan_id, "source_filename": plan.source_filename, "staged_filename": plan.staged_filename, "commands": list(plan.commands), "summary": plan.summary}
 
     def confirm(self, plan_id: str, confirmed: bool) -> dict[str, str]:
@@ -111,14 +100,11 @@ class CutPilotService:
             raise JobError("Explicit confirmation is required")
         if not isinstance(plan_id, str) or not 1 <= len(plan_id) <= 200:
             raise JobError("Invalid plan id")
-        with self.pending_lock:
-            self._purge_pending()
-            item = self.pending.get(plan_id)
-            if item is None:
-                raise JobError("Plan is missing or has already been used")
-            plan, selected, _ = item
-            name = handoff(self.ai_cut_directory, self.cutpilot_directory, plan, selected)
-            self.pending.pop(plan_id, None)
+        item = self.store.take(plan_id)
+        if item is None:
+            raise JobError("Plan is missing or has already been used")
+        plan, selected = item
+        name = handoff(self.ai_cut_directory, self.cutpilot_directory, plan, selected)
         return {"status": "queued", "filename": name}
 
 
