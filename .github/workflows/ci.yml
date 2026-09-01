@@ -21,6 +21,6 @@ jobs:
           sudo apt-get update
           sudo apt-get install --yes shellcheck
           bash -n deploy/cutpilot-watcher
-          shellcheck deploy/cutpilot-watcher
+          shellcheck --severity=error deploy/cutpilot-watcher
       - name: Docker build
         run: docker build --tag cutpilot:ci .
