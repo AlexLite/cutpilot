@@ -7,6 +7,7 @@ import hashlib
 import os
 from pathlib import Path
 import shutil
+import subprocess
 import uuid
 
 from .commands import VIDEO_EXTENSIONS, ValidatedPlan, build_worker_output_filename, validate_source_filename
@@ -26,11 +27,40 @@ class SourceFile:
 
 
 def _fingerprint(path: Path) -> str:
+    """Hash a small stable sample instead of reading the whole video."""
     digest = hashlib.blake2b(digest_size=16)
+    size = path.stat().st_size
     with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
+        sample_size = min(4 * 1024 * 1024, size)
+        digest.update(size.to_bytes(8, "little"))
+        digest.update(handle.read(sample_size))
+        if size > sample_size:
+            handle.seek(max(0, size - sample_size))
+            digest.update(handle.read(sample_size))
+        return digest.hexdigest()
+
+
+def _copy_fast(source: Path, temporary: Path) -> None:
+    """Prefer metadata-only same-filesystem handoff, then reflink, then copy."""
+    try:
+        os.link(source, temporary)
+        return
+    except OSError:
+        pass
+    try:
+        subprocess.run(
+            ["cp", "--reflink=auto", "--", str(source), str(temporary)],
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        return
+    except (OSError, subprocess.CalledProcessError):
+        pass
+    with source.open("rb") as input_file, temporary.open("xb") as output_file:
+        shutil.copyfileobj(input_file, output_file, length=1024 * 1024)
+        output_file.flush()
+        os.fsync(output_file.fileno())
 
 
 def _direct_file(directory: Path, filename: str) -> Path:
@@ -89,10 +119,7 @@ def handoff(directory: Path, cutpilot_directory: Path, plan: ValidatedPlan, expe
 
     temporary = destination_root / f".cutpilot.{uuid.uuid4().hex}.part"
     try:
-        with source.open("rb") as input_file, temporary.open("xb") as output_file:
-            shutil.copyfileobj(input_file, output_file, length=1024 * 1024)
-            output_file.flush()
-            os.fsync(output_file.fileno())
+        _copy_fast(source, temporary)
         os.replace(temporary, destination)
     except OSError as exc:
         try:
