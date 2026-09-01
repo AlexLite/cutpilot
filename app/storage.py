@@ -1,4 +1,4 @@
-"""Small SQLite store for plans awaiting confirmation."""
+"""SQLite store for pending plans and durable job history."""
 
 from __future__ import annotations
 
@@ -29,6 +29,17 @@ class PlanStore:
                     staged_filename TEXT NOT NULL,
                     created_at REAL NOT NULL,
                     expires_at REAL NOT NULL
+                )"""
+            )
+            db.execute(
+                """CREATE TABLE IF NOT EXISTS jobs (
+                    id TEXT PRIMARY KEY,
+                    source TEXT NOT NULL,
+                    staged_filename TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    message TEXT NOT NULL DEFAULT '',
+                    created_at REAL NOT NULL,
+                    updated_at REAL NOT NULL
                 )"""
             )
 
@@ -82,3 +93,20 @@ class PlanStore:
             fingerprint=row["source_fingerprint"],
         )
         return plan, source
+
+    def create_job(self, job_id: str, plan: ValidatedPlan) -> None:
+        now = time.time()
+        with closing(self._connect()) as db, db:
+            db.execute(
+                "INSERT INTO jobs (id, source, staged_filename, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+                (job_id, plan.source_filename, plan.staged_filename, "queued", now, now),
+            )
+
+    def update_job(self, job_id: str, status: str, message: str = "") -> None:
+        with closing(self._connect()) as db, db:
+            db.execute("UPDATE jobs SET status = ?, message = ?, updated_at = ? WHERE id = ?", (status, message, time.time(), job_id))
+
+    def list_jobs(self) -> list[dict[str, object]]:
+        with closing(self._connect()) as db:
+            rows = db.execute("SELECT id, source, staged_filename, status, message, created_at, updated_at FROM jobs ORDER BY updated_at DESC LIMIT 100").fetchall()
+        return [dict(row) for row in rows]
