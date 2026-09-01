@@ -106,6 +106,13 @@ class PlanStore:
         with closing(self._connect()) as db, db:
             db.execute("UPDATE jobs SET status = ?, message = ?, updated_at = ? WHERE id = ?", (status, message, time.time(), job_id))
 
+    def update_job_by_staged(self, staged_filename: str, status: str, message: str = "") -> None:
+        with closing(self._connect()) as db, db:
+            db.execute(
+                "UPDATE jobs SET status = ?, message = ?, updated_at = ? WHERE staged_filename = ? AND (status != ? OR message != ?)",
+                (status, message, time.time(), staged_filename, status, message),
+            )
+
     def list_jobs(self) -> list[dict[str, object]]:
         with closing(self._connect()) as db:
             rows = db.execute("SELECT id, source, staged_filename, status, message, created_at, updated_at FROM jobs ORDER BY updated_at DESC LIMIT 100").fetchall()

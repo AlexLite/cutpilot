@@ -100,6 +100,8 @@ class CutPilotService:
                 name = path.name.rsplit(".", 2)[0]
                 job_id = path.name.rsplit(".", 2)[1]
                 status = values.get("status", "processing")
+                message = values.get("message", "")
+                self.store.update_job_by_staged(name, status, message)
                 progress = ""
                 try:
                     duration = float(values.get("duration", "0") or 0)
@@ -112,7 +114,7 @@ class CutPilotService:
                     "id": job_id,
                     "source": name,
                     "status": status,
-                    "message": values.get("message", ""),
+                    "message": message,
                     "updated_at": int(values.get("updated_at", "0") or 0),
                     "progress": progress,
                     "out_time_ms": values.get("out_time_ms", ""),
