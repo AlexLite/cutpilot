@@ -75,6 +75,32 @@ class CutPilotService:
             for item in list_sources(self.ai_cut_directory)
         ]
 
+    def jobs(self) -> list[dict[str, Any]]:
+        progress_directory = self.cutpilot_directory / ".cutpilot-progress"
+        if not progress_directory.is_dir():
+            return []
+        result = []
+        for path in progress_directory.glob("*.progress"):
+            try:
+                values = {}
+                for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+                    key, separator, value = line.partition("=")
+                    if separator:
+                        values[key] = value
+                name = path.name.rsplit(".", 2)[0]
+                status = values.get("status", "processing")
+                result.append({
+                    "source": name,
+                    "status": status,
+                    "message": values.get("message", ""),
+                    "updated_at": int(values.get("updated_at", "0") or 0),
+                    "progress": values.get("progress", ""),
+                    "out_time_ms": values.get("out_time_ms", ""),
+                })
+            except OSError:
+                continue
+        return sorted(result, key=lambda item: item["updated_at"], reverse=True)
+
     def create_plan(self, source: str, task: str) -> dict[str, Any]:
         if not isinstance(task, str) or not 1 <= len(task.strip()) <= 4000:
             raise CommandValidationError("Task must contain 1-4000 characters")
@@ -138,6 +164,12 @@ def make_handler(service: CutPilotService):
                     _json_response(self, HTTPStatus.OK, {"files": service.files()})
                 except OSError:
                     _json_response(self, HTTPStatus.INTERNAL_SERVER_ERROR, {"error": "AI_Cut is not available"})
+                return
+            if self.path == "/api/jobs":
+                try:
+                    _json_response(self, HTTPStatus.OK, {"jobs": service.jobs()})
+                except OSError:
+                    _json_response(self, HTTPStatus.INTERNAL_SERVER_ERROR, {"error": "Queue is not available"})
                 return
             if self.path in {"/", "/index.html"}:
                 body = (Path(__file__).parent / "static" / "index.html").read_bytes()

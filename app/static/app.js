@@ -14,18 +14,31 @@ document.querySelectorAll('.tab').forEach((button) => button.addEventListener('c
   document.getElementById(button.dataset.tab).classList.add('active');
 }));
 
-document.querySelectorAll('.tab').forEach((button) => button.addEventListener('click', () => {
-  document.querySelectorAll('.tab, .pane').forEach((element) => element.classList.remove('active'));
-  button.classList.add('active');
-  document.getElementById(button.dataset.tab).classList.add('active');
-}));
-
 async function loadFiles() {
   const response = await fetch('/api/files');
   const data = await response.json();
   if (!response.ok) throw new Error(data.error || 'Не удалось получить список');
   source.replaceChildren(...data.files.map(file => new Option(`${file.name} (${file.size} bytes)`, file.name)));
   if (!data.files.length) show('В AI_Cut пока нет видео.');
+}
+
+async function loadJobs() {
+  const response = await fetch('/api/jobs');
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || 'Не удалось получить очередь');
+  const queue = document.querySelector('#queue');
+  const list = document.querySelector('#queue-list');
+  queue.hidden = !data.jobs.length;
+  list.replaceChildren(...data.jobs.slice(0, 20).map((job) => {
+    const item = document.createElement('div');
+    item.className = 'queue-item';
+    const name = document.createElement('span');
+    name.textContent = job.source;
+    const state = document.createElement('small');
+    state.textContent = job.status === 'completed' ? `готово: ${job.message}` : job.status === 'failed' ? `ошибка: ${job.message}` : 'обрабатывается';
+    item.append(name, state);
+    return item;
+  }));
 }
 
 document.querySelector('#plan').onclick = async () => {
@@ -65,3 +78,5 @@ confirmButton.onclick = async () => {
 };
 
 loadFiles().catch(error => show(`Ошибка списка файлов: ${error.message}`));
+loadJobs().catch(() => {});
+setInterval(() => loadJobs().catch(() => {}), 5000);

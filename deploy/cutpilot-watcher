@@ -10,10 +10,11 @@ LOG_FILE=/var/log/cutpilot-watcher.log
 RUN_DIR=/run/cutpilot
 STABLE_DIR=$RUN_DIR/stable
 LOCK_DIR=$RUN_DIR/locks
+PROGRESS_DIR=$WATCH_DIR/.cutpilot-progress
 STABLE_DELAY=${CUTPILOT_STABLE_DELAY:-10}
 WORKER_MODE=${CUTPILOT_WORKER_MODE:-nvenc}
 
-mkdir -p "$WATCH_DIR" "$RUN_DIR" "$STABLE_DIR" "$LOCK_DIR"
+mkdir -p "$WATCH_DIR" "$RUN_DIR" "$STABLE_DIR" "$LOCK_DIR" "$PROGRESS_DIR"
 # Locks are empty directories. A service restart can interrupt a worker before its
 # RETURN trap runs, so clear locks inherited from a previous watcher instance.
 find "$LOCK_DIR" -mindepth 1 -maxdepth 1 -type d -empty -exec rmdir {} + 2>/dev/null || true
@@ -28,6 +29,15 @@ processable_file(){
   return 0
 }
 state_file(){ printf '%s/%s' "$STABLE_DIR" "$(printf '%s' "$1" | sha256sum | awk '{print $1}')"; }
+progress_file(){ printf '%s/%s.%s.progress' "$PROGRESS_DIR" "$(basename "$1")" "$(printf '%s' "$1" | sha256sum | awk '{print $1}')"; }
+write_progress(){
+  local file=$1 status=$2 message=${3:-} temporary="${file}.tmp.$$"
+  {
+    printf 'status=%s\n' "$status"
+    printf 'message=%s\n' "$message"
+    printf 'updated_at=%s\n' "$(date +%s)"
+  } > "$temporary" && mv -f "$temporary" "$file"
+}
 
   probe_video(){
     local key value probe_output
@@ -254,7 +264,7 @@ encode(){
   [[ "$VIDEO_CODEC" == hevc ]] && { codec=hevc; profile=main; level=5.1; } || { codec=h264; profile=high; level=5.1; }
   # The worker loop owns stdin (it feeds find output to read). Prevent FFmpeg
   # from interpreting that stream as its interactive command console.
-  local -a common=(-nostdin -hide_banner -loglevel error -xerror -y -i "$input")
+  local -a common=(-nostdin -hide_banner -loglevel error -nostats -progress "$PROGRESS_FILE" -xerror -y -i "$input")
   (( NO_LOGO )) || common+=(-i "$ACTIVE_LOGO")
   [[ -n "$TAIL_TRIM" ]] && common+=(-t "$TAIL_TRIM")
   common+=(-filter_complex "$FILTER" -map '[v]')
@@ -298,10 +308,12 @@ process_file(){
   processable_file "$input" || return 0
   lock="$LOCK_DIR/$name.lock"; mkdir "$lock" 2>/dev/null || return 0
   trap 'rmdir "$lock" 2>/dev/null || true' RETURN
+  PROGRESS_FILE=$(progress_file "$input")
+  write_progress "$PROGRESS_FILE" processing "$name"
   parse_commands "$base" || { write_error "$input" "$CMD_ERROR"; return 0; }
-  probe_video "$input" || { write_error "$input" "Cannot read video parameters"; return 0; }
-  validate_audio "$input" || { write_error "$input" "Input audio is invalid or the file is still being copied"; return 0; }
-  prepare_edit || { write_error "$input" "$CMD_ERROR"; return 0; }
+  probe_video "$input" || { write_error "$input" "Cannot read video parameters"; write_progress "$PROGRESS_FILE" failed "Cannot read video parameters"; return 0; }
+  validate_audio "$input" || { write_error "$input" "Input audio is invalid or the file is still being copied"; write_progress "$PROGRESS_FILE" failed "Input audio is invalid or the file is still being copied"; return 0; }
+  prepare_edit || { write_error "$input" "$CMD_ERROR"; write_progress "$PROGRESS_FILE" failed "$CMD_ERROR"; return 0; }
   [[ -n "$OUT_CONTAINER" ]] && out_ext=$OUT_CONTAINER || out_ext=${ext,,}
   (( NO_LOGO )) && output="$WATCH_DIR/${CLEAN_STEM}_nologo.$out_ext" || output="$WATCH_DIR/${CLEAN_STEM}_logo.$out_ext"
   [[ "$output" == "$input" ]] && { write_error "$input" "Output name matches source name"; return 0; }
@@ -313,13 +325,13 @@ process_file(){
   build_filter "$mode" || { write_error "$input" "Logo file is missing"; return 0; }
   tmp="$output.tmp.$$.$RANDOM.$out_ext"
   log "Processing[$mode]: $name -> $(basename "$output")"
-  if ! encode "$mode" "$input" "$tmp"; then
-    rm -f "$tmp"; write_error "$input" "Encoding failed; source retained for retry"; return 1
+    if ! encode "$mode" "$input" "$tmp"; then
+      rm -f "$tmp"; write_error "$input" "Encoding failed; source retained for retry"; write_progress "$PROGRESS_FILE" failed "Encoding failed; source retained for retry"; return 1
   fi
   if ! validate_output "$tmp"; then
-    rm -f "$tmp"; write_error "$input" "Output validation failed; source retained for retry"; return 1
+      rm -f "$tmp"; write_error "$input" "Output validation failed; source retained for retry"; write_progress "$PROGRESS_FILE" failed "Output validation failed; source retained for retry"; return 1
   fi
-  mv -f "$tmp" "$output" && rm -f "$input" "${input%.*}.error.txt" "$(state_file "$input")" && log "Created: $(basename "$output"); removed original: $name"
+  mv -f "$tmp" "$output" && rm -f "$input" "${input%.*}.error.txt" "$(state_file "$input")" && write_progress "$PROGRESS_FILE" completed "$(basename "$output")" && log "Created: $(basename "$output"); removed original: $name"
 }
 
 stable_enough(){
