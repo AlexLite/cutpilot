@@ -266,7 +266,7 @@ build_filter(){
     # them to the source axis and overlay at 0:0 to retain their designed
     # internal placement at every output resolution.
     chain+='[1:v]format=rgba,scale='"${SRC_WIDTH}"':-2,colorchannelmixer=aa=0.90[logo];'
-    chain+="$source[logo]overlay=0:0:format=auto"
+    chain+="${source}[logo]overlay=0:0:format=auto"
   fi
   (( TARGET_HEIGHT > 0 )) && chain+=",scale=-2:${TARGET_HEIGHT}"
   chain+=",${final_format}"
