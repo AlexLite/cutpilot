@@ -14,6 +14,12 @@ document.querySelectorAll('.tab').forEach((button) => button.addEventListener('c
   document.getElementById(button.dataset.tab).classList.add('active');
 }));
 
+document.querySelectorAll('.tab').forEach((button) => button.addEventListener('click', () => {
+  document.querySelectorAll('.tab, .pane').forEach((element) => element.classList.remove('active'));
+  button.classList.add('active');
+  document.getElementById(button.dataset.tab).classList.add('active');
+}));
+
 async function loadFiles() {
   const response = await fetch('/api/files');
   const data = await response.json();

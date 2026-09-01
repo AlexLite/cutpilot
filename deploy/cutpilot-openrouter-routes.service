@@ -1,0 +1,9 @@
+[Unit]
+Description=Route OpenRouter traffic through the CutPilot egress gateway
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/cutpilot-openrouter-routes
+User=root

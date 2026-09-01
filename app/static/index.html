@@ -3,54 +3,70 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>CutPilot — AI Cut</title>
+  <title>CutPilot</title>
   <style>
-    body { max-width: 1050px; margin: 0 auto; padding: 2rem 1rem 4rem; font: 16px/1.5 system-ui, sans-serif; color: #eef4ff; background: #101827; }
-    .tabs { display: flex; gap: .5rem; margin: 1.5rem 0; }
-    .tab { padding: .7rem 1rem; color: inherit; background: #172238; border: 1px solid #3a4b69; border-radius: .5rem; cursor: pointer; }
-    .tab.active { background: #2b4e7c; border-color: #65a9ff; }
-    .pane { display: none; background: #172238; border: 1px solid #2c3b56; border-radius: .8rem; padding: 1.2rem; }
-    .pane.active { display: block; }
-    .card { background: #1d2b45; border-radius: .6rem; padding: 1rem; margin: .8rem 0; }
-    code { background: #0e1626; border-radius: .3rem; padding: .15rem .3rem; }
-    label { display: block; margin: 1rem 0 .4rem; font-weight: 650; }
-    select, textarea, button { width: 100%; box-sizing: border-box; padding: .7rem; font: inherit; }
-    textarea { min-height: 7rem; }
-    button { margin-top: 1rem; cursor: pointer; }
-    pre { white-space: pre-wrap; background: #0e1626; padding: 1rem; border-radius: .4rem; }
-    .warning { background: #2c2930; padding: .8rem; border-left: 4px solid #ffc469; }
-    #confirm { display: none; }
+    :root { color-scheme: dark; --bg:#212121; --panel:#171717; --border:#3b3b3b; --text:#ececec; --muted:#a7a7a7; --accent:#10a37f; }
+    * { box-sizing:border-box; }
+    body { margin:0; min-height:100vh; background:var(--bg); color:var(--text); font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif; }
+    .layout { display:grid; grid-template-columns:250px 1fr; min-height:100vh; }
+    aside { display:flex; flex-direction:column; gap:1.5rem; padding:1rem .75rem; background:var(--panel); border-right:1px solid #303030; }
+    .brand { display:flex; align-items:center; gap:.7rem; padding:.5rem .65rem; font-weight:700; font-size:1.05rem; }
+    .brand-mark,.welcome-mark { display:grid; place-items:center; background:var(--accent); color:white; font-weight:800; }
+    .brand-mark { width:28px; height:28px; border-radius:8px; font-size:.75rem; }
+    .side-title { padding:0 .65rem; color:var(--muted); font-size:.75rem; text-transform:uppercase; letter-spacing:.08em; }
+    .side-note { margin-top:auto; padding:.7rem; color:var(--muted); font-size:.78rem; }
+    main { display:flex; flex-direction:column; min-width:0; }
+    .topbar { display:flex; justify-content:space-between; align-items:center; min-height:56px; padding:0 1.5rem; border-bottom:1px solid #303030; }
+    .topbar h1 { margin:0; font-size:1rem; font-weight:600; }
+    .connection { color:var(--muted); font-size:.8rem; }
+    .tabs { display:flex; gap:.25rem; padding:.7rem 1.5rem 0; border-bottom:1px solid #303030; }
+    .tab { padding:.55rem .85rem; color:var(--muted); background:transparent; border:0; border-bottom:2px solid transparent; cursor:pointer; font:inherit; }
+    .tab:hover,.tab.active { color:var(--text); }
+    .tab.active { border-bottom-color:var(--accent); }
+    .pane { display:none; width:min(860px,100%); margin:0 auto; padding:2.5rem 1.5rem 7rem; }
+    .pane.active { display:block; }
+    .welcome { margin:4rem auto 2rem; text-align:center; }
+    .welcome h2 { margin:.8rem 0 .35rem; font-size:1.8rem; }
+    .welcome p { margin:0; color:var(--muted); }
+    .welcome-mark { width:54px; height:54px; margin:auto; border-radius:16px; font-size:1.2rem; }
+    .composer { margin-top:2rem; padding:1rem; background:#2f2f2f; border:1px solid #454545; border-radius:14px; box-shadow:0 8px 25px #0002; }
+    label { display:block; margin:0 0 .45rem; color:var(--muted); font-size:.82rem; }
+    select,textarea,button { font:inherit; }
+    select,textarea { width:100%; color:var(--text); background:#212121; border:1px solid #4a4a4a; border-radius:9px; padding:.75rem; outline:none; }
+    select:focus,textarea:focus { border-color:var(--accent); }
+    textarea { min-height:92px; resize:vertical; }
+    .compose-row { display:flex; gap:.75rem; align-items:end; }
+    .compose-row > div { flex:1; }
+    .send { width:auto; min-width:116px; padding:.75rem 1rem; color:white; background:var(--accent); border:0; border-radius:9px; cursor:pointer; font-weight:600; }
+    .send:hover { filter:brightness(1.1); }
+    .hint { margin:.7rem 0 0; color:var(--muted); font-size:.78rem; }
+    #review { margin-top:1.5rem; padding:1rem; background:#292929; border:1px solid var(--border); border-radius:12px; }
+    #review h3 { margin:0 0 .7rem; font-size:.95rem; }
+    pre { margin:0; white-space:pre-wrap; color:#d8d8d8; font:13px/1.55 ui-monospace,SFMono-Regular,Consolas,monospace; }
+    #confirm { display:block; width:100%; margin-top:1rem; padding:.7rem; color:white; background:#444; border:1px solid #5b5b5b; border-radius:8px; cursor:pointer; }
+    #confirm:hover { background:#555; }
+    #status { min-height:24px; margin:.9rem 0 0; color:var(--muted); }
+    .instruction-card { margin:1rem 0; padding:1.1rem 1.2rem; background:#292929; border:1px solid var(--border); border-radius:12px; }
+    .instruction-card h3 { margin:0 0 .35rem; font-size:1rem; }
+    .instruction-card p { margin:.25rem 0; color:#c8c8c8; }
+    code { padding:.12rem .3rem; color:#b7e9dc; background:#151515; border-radius:4px; }
+    @media (max-width:700px) { .layout { grid-template-columns:1fr; } aside { display:none; } .topbar { padding:0 1rem; } .tabs { padding-left:1rem; } .pane { padding:1.5rem 1rem 5rem; } .welcome { margin:2rem auto 1.5rem; } .compose-row { display:block; } .send { width:100%; margin-top:.75rem; } }
   </style>
 </head>
 <body>
-  <h1>CutPilot — AI Cut</h1>
-  <p class="warning">Видео не отправляется AI-провайдеру. OpenRouter получает только имя, размер и вашу текстовую задачу. В очередь CutPilot файл попадёт только после подтверждения.</p>
-  <nav class="tabs" aria-label="Разделы CutPilot">
-    <button class="tab active" data-tab="agent">AI-агент</button>
-    <button class="tab" data-tab="instructions">Инструкция</button>
-  </nav>
-  <section class="pane active" id="agent">
-    <h2>Подготовить задание</h2>
-    <label for="source">Видео из AI_Cut</label>
-    <select id="source"></select>
-    <label for="task">Что сделать</label>
-    <textarea id="task" placeholder="Например: сделать MP4 1080p без логотипа и удалить участок 4.15–4.36"></textarea>
-    <button id="plan">Получить план</button>
-    <section id="review" hidden>
-      <h2>Проверка</h2>
-      <pre id="details"></pre>
-      <button id="confirm">Подтвердить и поставить в CutPilot</button>
-    </section>
-    <p id="status"></p>
-  </section>
-  <section class="pane" id="instructions">
-    <h2>Инструкция</h2>
-    <div class="card"><strong>1. Выберите видео</strong><br>CutPilot видит видеофайлы непосредственно в папке <code>AI_Cut</code>.</div>
-    <div class="card"><strong>2. Опишите задачу</strong><br>Укажите формат, разрешение, логотип, FPS, размер или монтажные таймкоды. Видео и его содержимое AI не получает.</div>
-    <div class="card"><strong>3. Проверьте план</strong><br>Перед подтверждением проверьте исходное имя, итоговое имя и команды.</div>
-    <div class="card"><strong>4. Подтвердите передачу</strong><br>Только после подтверждения копия файла попадёт в очередь CutPilot. Исходник останется в <code>AI_Cut</code>.</div>
-    <p>Таймкод записывается через точку: <code>4.15</code> — 4 минуты 15 секунд; <code>01.23.23</code> — 1 час 23 минуты 23 секунды. Двоеточия не используются.</p>
-  </section>
+  <div class="layout">
+    <aside><div class="brand"><span class="brand-mark">CP</span> CutPilot</div><div class="side-title">Локальный AI Cut</div><div class="side-note">Видео остаётся в локальной инфраструктуре. AI получает только имя, размер и текст задачи.</div></aside>
+    <main>
+      <header class="topbar"><h1>AI-агент</h1><span class="connection">Локальная сеть</span></header>
+      <nav class="tabs" aria-label="Разделы CutPilot"><button class="tab active" data-tab="agent">AI-агент</button><button class="tab" data-tab="instructions">Инструкция</button></nav>
+      <section class="pane active" id="agent">
+        <div class="welcome"><span class="welcome-mark">CP</span><h2>Что сделаем с видео?</h2><p>Опишите задачу обычным языком — я подготовлю безопасный план.</p></div>
+        <div class="composer"><div class="compose-row"><div><label for="source">Исходное видео</label><select id="source"></select></div><button class="send" id="plan">Создать план</button></div><label for="task" style="margin-top:.85rem">Задача</label><textarea id="task" placeholder="Например: MP4 1080p без логотипа, удалить участок 4.15–4.36"></textarea><p class="hint">Видео не загружается AI-провайдеру. Перед постановкой в очередь план нужно подтвердить.</p></div>
+        <section id="review" hidden><h3>План готов</h3><pre id="details"></pre><button id="confirm">Подтвердить и поставить в очередь</button></section><p id="status"></p>
+      </section>
+      <section class="pane" id="instructions"><div class="welcome"><h2>Инструкция</h2><p>Коротко о безопасной обработке видео.</p></div><div class="instruction-card"><h3>1. Выберите видео</h3><p>Исходники берутся из папки <code>AI_Cut</code>. Видео и его содержимое не отправляются наружу.</p></div><div class="instruction-card"><h3>2. Опишите задачу</h3><p>Укажите формат, разрешение, FPS, логотип, размер или монтажные таймкоды.</p></div><div class="instruction-card"><h3>3. Проверьте и подтвердите</h3><p>CutPilot покажет итоговое имя и команды. Только после подтверждения копия попадёт в очередь, исходник сохранится.</p></div><div class="instruction-card"><h3>Формат времени</h3><p><code>4.15</code> — 4 минуты 15 секунд; <code>01.23.23</code> — 1 час 23 минуты 23 секунды. Двоеточия не используются.</p></div></section>
+    </main>
+  </div>
   <script src="/static/app.js" defer></script>
 </body>
 </html>

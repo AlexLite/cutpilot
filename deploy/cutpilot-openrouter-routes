@@ -1,0 +1,35 @@
+#!/bin/sh
+set -eu
+
+STATE_FILE=/run/cutpilot-openrouter-routes
+GATEWAY=192.168.12.20
+INTERFACE=eth0
+
+tmp_file="${STATE_FILE}.$$"
+trap 'rm -f "$tmp_file"' EXIT INT TERM
+
+mkdir -p "$(dirname "$STATE_FILE")"
+getent ahostsv4 openrouter.ai | awk '{print $1}' | sort -u > "$tmp_file"
+
+if [ ! -s "$tmp_file" ]; then
+    echo "No IPv4 addresses resolved for openrouter.ai" >&2
+    exit 1
+fi
+
+while IFS= read -r address; do
+    ip route replace "$address/32" via "$GATEWAY" dev "$INTERFACE"
+done < "$tmp_file"
+
+if [ -f "$STATE_FILE" ]; then
+    while IFS= read -r old_address; do
+        if ! grep -Fqx "$old_address" "$tmp_file"; then
+            ip route del "$old_address/32" via "$GATEWAY" dev "$INTERFACE" 2>/dev/null || true
+        fi
+    done < "$STATE_FILE"
+fi
+
+mv "$tmp_file" "$STATE_FILE"
+trap - EXIT INT TERM
+
+echo "OpenRouter routes via $GATEWAY:"
+sed 's#^#  #' "$STATE_FILE"

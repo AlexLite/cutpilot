@@ -1,0 +1,10 @@
+[Unit]
+Description=Refresh OpenRouter egress routes for CutPilot
+
+[Timer]
+OnBootSec=30s
+OnUnitActiveSec=5min
+Unit=cutpilot-openrouter-routes.service
+
+[Install]
+WantedBy=timers.target

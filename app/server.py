@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from dataclasses import asdict
 import json
+import logging
 import os
 from pathlib import Path
+import re
 import secrets
 import threading
 import time
@@ -16,6 +18,46 @@ from typing import Any
 from .ai import AIProviderError, OpenRouterAdapter
 from .commands import CommandValidationError, ValidatedPlan, validate_plan
 from .jobs import JobError, handoff, list_sources, source_metadata
+
+logger = logging.getLogger("cutpilot.server")
+
+
+def _correct_logo_intent(raw: Any, task: str) -> Any:
+    """Prevent a positive Russian logo request from becoming a no-logo command."""
+    if not isinstance(raw, dict) or not isinstance(raw.get("commands"), list):
+        return raw
+    lowered = task.casefold()
+    positive = bool(re.search(r"(?:с|добавь|добавить|оставь|оставить|наложи|наложить|нанеси|поставь|keep|with)\s*(?:лого|логотип)", lowered))
+    negative = bool(re.search(r"(?:без|убери|убрать|удали|удалить|remove)\s*(?:лого|логотип)", lowered))
+    if not positive or negative:
+        return raw
+    commands = [command for command in raw["commands"] if command not in {"-nl", "-nologo"}]
+    if len(commands) != len(raw["commands"]):
+        corrected = dict(raw)
+        corrected["commands"] = commands
+        logger.warning("Corrected logo intent: task=%r raw=%r corrected=%r", task, raw, corrected)
+        return corrected
+    return raw
+
+
+def _correct_edit_intent(raw: Any, task: str) -> Any:
+    """Turn a concatenate request into one validated crp+ command."""
+    if not isinstance(raw, dict) or not isinstance(raw.get("commands"), list):
+        return raw
+    if not re.search(r"(?:склей|склеить|соедини|соединить|объедини|объединить)", task.casefold()):
+        return raw
+    commands = raw["commands"]
+    edit_indexes = [index for index, command in enumerate(commands) if isinstance(command, str) and command.startswith(("-crp-", "-crp=", "-crp+"))]
+    if not edit_indexes:
+        return raw
+    ranges: list[str] = []
+    for index in edit_indexes:
+        ranges.extend(commands[index][5:].split("+"))
+    corrected = dict(raw)
+    corrected["commands"] = [command for index, command in enumerate(commands) if index not in edit_indexes]
+    corrected["commands"].insert(min(edit_indexes), "-crp+" + "+".join(ranges))
+    logger.warning("Corrected edit intent: task=%r raw=%r corrected=%r", task, raw, corrected)
+    return corrected
 
 
 class CutPilotService:
@@ -49,7 +91,13 @@ class CutPilotService:
             {"size_bytes": selected.size},
             task.strip(),
         )
-        plan = validate_plan(selected.name, raw)
+        raw = _correct_edit_intent(raw, task.strip())
+        raw = _correct_logo_intent(raw, task.strip())
+        try:
+            plan = validate_plan(selected.name, raw)
+        except CommandValidationError:
+            logger.exception("AI plan validation failed: source=%s raw=%r", selected.name, raw)
+            raise
         plan_id = secrets.token_urlsafe(24)
         with self.pending_lock:
             self._purge_pending()
@@ -147,6 +195,10 @@ def make_handler(service: CutPilotService):
 
 
 def run() -> None:
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    )
     host = os.environ.get("CUTPILOT_HOST", "127.0.0.1")
     port = int(os.environ.get("CUTPILOT_PORT", "8787"))
     service = CutPilotService()
