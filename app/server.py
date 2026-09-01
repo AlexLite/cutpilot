@@ -16,6 +16,7 @@ from typing import Any
 from .ai import AIProviderError, OpenRouterAdapter
 from .commands import CommandValidationError, ValidatedPlan, validate_plan
 from .jobs import JobError, handoff, list_sources, source_metadata
+from .rules import simple_plan
 from .storage import PlanStore
 
 logger = logging.getLogger("cutpilot.server")
@@ -131,11 +132,12 @@ class CutPilotService:
         if not isinstance(task, str) or not 1 <= len(task.strip()) <= 4000:
             raise CommandValidationError("Task must contain 1-4000 characters")
         selected = source_metadata(self.ai_cut_directory, source)
-        raw = self.ai.create_plan(
-            selected.name,
-            {"size_bytes": selected.size},
-            task.strip(),
-        )
+        normalized_task = task.strip()
+        raw = simple_plan(normalized_task) if isinstance(self.ai, OpenRouterAdapter) else None
+        if raw is not None:
+            logger.info("Using local rule plan: task=%r plan=%r", normalized_task, raw)
+        else:
+            raw = self.ai.create_plan(selected.name, {"size_bytes": selected.size}, normalized_task)
         raw = _correct_edit_intent(raw, task.strip())
         raw = _correct_logo_intent(raw, task.strip())
         try:
