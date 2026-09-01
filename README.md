@@ -18,6 +18,9 @@ It lets a user choose a video from `AI_Cut`, describe the required edit in natur
 - `app/commands/` — parser and validator for the existing AutoLogo command language.
 - `app/jobs/` — confirmed-job hand-off to the AutoLogo worker.
 - `deploy/` — systemd, reverse proxy, and environment examples.
+- `deploy/autologo-watcher` — the current production AutoLogo watcher, preserved as the compatibility target for the first CutPilot release.
+- `assets/` — horizontal and vertical logo assets used by the watcher.
+- `docs/!!!ПРОЧИТАЙ.html` and `docs/!!!ПРОЧИТАЙ.txt` — the current user instructions served through the SMB share.
 
 ## First release
 
