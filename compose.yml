@@ -1,0 +1,29 @@
+services:
+  cutpilot:
+    build: .
+    image: cutpilot:local
+    restart: unless-stopped
+    ports:
+      - "${CUTPILOT_BIND_ADDRESS:-127.0.0.1}:8787:8787"
+    environment:
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      OPENROUTER_MODEL: ${OPENROUTER_MODEL:-}
+      OPENROUTER_ENDPOINT: ${OPENROUTER_ENDPOINT:-https://openrouter.ai/api/v1/chat/completions}
+      CUTPILOT_HOST: 0.0.0.0
+      CUTPILOT_PORT: 8787
+      CUTPILOT_AI_CUT_DIRECTORY: /srv/cutpilot/AI_Cut
+      CUTPILOT_DIRECTORY: /srv/cutpilot
+    volumes:
+      - ${CUTPILOT_DATA_DIRECTORY:-./data/cutpilot}:/srv/cutpilot
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8787/api/files', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3

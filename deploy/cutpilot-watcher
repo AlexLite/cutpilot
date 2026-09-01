@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
-# Autologo folder watcher. Command block examples: [cmd -mp4 -1080p] or [cmd-mp4-1080p]
+# CutPilot folder watcher. Command block examples: [cmd -mp4 -1080p] or [cmd-mp4-1080p]
 set -u
 shopt -s nocasematch
 
-WATCH_DIR=/srv/autologo
-LOGO_H=${AUTOLOGO_LOGO_H:-/srv/logo/logo.png}
-LOGO_V=${AUTOLOGO_LOGO_V:-/srv/logo/logo_v.png}
-LOG_FILE=/var/log/autologo-watcher.log
-RUN_DIR=/run/autologo
+WATCH_DIR=/srv/cutpilot
+LOGO_H=${CUTPILOT_LOGO_H:-/srv/logo/logo.png}
+LOGO_V=${CUTPILOT_LOGO_V:-/srv/logo/logo_v.png}
+LOG_FILE=/var/log/cutpilot-watcher.log
+RUN_DIR=/run/cutpilot
 STABLE_DIR=$RUN_DIR/stable
 LOCK_DIR=$RUN_DIR/locks
-STABLE_DELAY=${AUTOLOGO_STABLE_DELAY:-10}
+STABLE_DELAY=${CUTPILOT_STABLE_DELAY:-10}
 
 mkdir -p "$WATCH_DIR" "$RUN_DIR" "$STABLE_DIR" "$LOCK_DIR"
 # Locks are empty directories. A service restart can interrupt a worker before its
@@ -207,8 +207,11 @@ build_filter(){
   else
     if (( SRC_HEIGHT > SRC_WIDTH )); then ACTIVE_LOGO=$LOGO_V; else ACTIVE_LOGO=$LOGO_H; fi
     [[ -f "$ACTIVE_LOGO" ]] || return 1
-    chain+='[1:v]format=rgba,colorchannelmixer=aa=0.90[logo];'
-    chain+="$source[logo]overlay=W-w-32:H-h-32:format=auto"
+    # Logo files are transparent layout templates, not small badges. Scale
+    # them to the source axis and overlay at 0:0 to retain their designed
+    # internal placement at every output resolution.
+    chain+='[1:v]format=rgba,scale='"${SRC_WIDTH}"':-2,colorchannelmixer=aa=0.90[logo];'
+    chain+="$source[logo]overlay=0:0:format=auto"
   fi
   (( TARGET_HEIGHT > 0 )) && chain+=",scale=-2:${TARGET_HEIGHT}"
   chain+=",${final_format}"
@@ -216,7 +219,7 @@ build_filter(){
 }
 
 encode(){
-  local mode=$1 input=$2 output=$3 bitrate codec profile level
+  local mode=$1 input=$2 output=$3 bitrate codec profile
   bitrate=$(target_bitrate "${TAIL_TRIM:-$SRC_DURATION}")
   [[ "$VIDEO_CODEC" == hevc ]] && { codec=hevc; profile=main; level=5.1; } || { codec=h264; profile=high; level=5.1; }
   local -a common=(-hide_banner -loglevel error -xerror -y -i "$input")
@@ -230,7 +233,9 @@ encode(){
   elif (( AUDIO_REENCODE )); then common+=(-c:a aac -b:a "$SRC_AUDIO_BITRATE")
   else common+=(-c:a copy); fi
   if [[ "$mode" == nvenc ]]; then
-    [[ "$codec" == hevc ]] && common+=(-c:v hevc_nvenc -profile:v main -level:v 5.1) || common+=(-c:v h264_nvenc -profile:v high -level:v 5.1)
+    # Let NVENC select a valid level. 4K/50fps exceeds H.264 Level 5.1 and
+    # requires Level 5.2, while ordinary inputs still resolve to Level 5.1.
+    [[ "$codec" == hevc ]] && common+=(-c:v hevc_nvenc -profile:v main) || common+=(-c:v h264_nvenc -profile:v high)
     common+=(-preset p7 -tune hq -multipass fullres -spatial_aq 1 -temporal_aq 1 -aq-strength 8)
     if (( bitrate > 0 )); then
       common+=(-rc:v vbr -b:v "$bitrate" -maxrate:v "$bitrate" -bufsize:v "$((bitrate*2))")

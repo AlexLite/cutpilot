@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CutPilot — AI Cut</title>
+  <style>
+    body { max-width: 1050px; margin: 0 auto; padding: 2rem 1rem 4rem; font: 16px/1.5 system-ui, sans-serif; color: #eef4ff; background: #101827; }
+    .tabs { display: flex; gap: .5rem; margin: 1.5rem 0; }
+    .tab { padding: .7rem 1rem; color: inherit; background: #172238; border: 1px solid #3a4b69; border-radius: .5rem; cursor: pointer; }
+    .tab.active { background: #2b4e7c; border-color: #65a9ff; }
+    .pane { display: none; background: #172238; border: 1px solid #2c3b56; border-radius: .8rem; padding: 1.2rem; }
+    .pane.active { display: block; }
+    .card { background: #1d2b45; border-radius: .6rem; padding: 1rem; margin: .8rem 0; }
+    code { background: #0e1626; border-radius: .3rem; padding: .15rem .3rem; }
+    label { display: block; margin: 1rem 0 .4rem; font-weight: 650; }
+    select, textarea, button { width: 100%; box-sizing: border-box; padding: .7rem; font: inherit; }
+    textarea { min-height: 7rem; }
+    button { margin-top: 1rem; cursor: pointer; }
+    pre { white-space: pre-wrap; background: #0e1626; padding: 1rem; border-radius: .4rem; }
+    .warning { background: #2c2930; padding: .8rem; border-left: 4px solid #ffc469; }
+    #confirm { display: none; }
+  </style>
+</head>
+<body>
+  <h1>CutPilot — AI Cut</h1>
+  <p class="warning">Видео не отправляется AI-провайдеру. OpenRouter получает только имя, размер и вашу текстовую задачу. В очередь CutPilot файл попадёт только после подтверждения.</p>
+  <nav class="tabs" aria-label="Разделы CutPilot">
+    <button class="tab active" data-tab="agent">AI-агент</button>
+    <button class="tab" data-tab="instructions">Инструкция</button>
+  </nav>
+  <section class="pane active" id="agent">
+    <h2>Подготовить задание</h2>
+    <label for="source">Видео из AI_Cut</label>
+    <select id="source"></select>
+    <label for="task">Что сделать</label>
+    <textarea id="task" placeholder="Например: сделать MP4 1080p без логотипа и удалить участок 4.15–4.36"></textarea>
+    <button id="plan">Получить план</button>
+    <section id="review" hidden>
+      <h2>Проверка</h2>
+      <pre id="details"></pre>
+      <button id="confirm">Подтвердить и поставить в CutPilot</button>
+    </section>
+    <p id="status"></p>
+  </section>
+  <section class="pane" id="instructions">
+    <h2>Инструкция</h2>
+    <div class="card"><strong>1. Выберите видео</strong><br>CutPilot видит видеофайлы непосредственно в папке <code>AI_Cut</code>.</div>
+    <div class="card"><strong>2. Опишите задачу</strong><br>Укажите формат, разрешение, логотип, FPS, размер или монтажные таймкоды. Видео и его содержимое AI не получает.</div>
+    <div class="card"><strong>3. Проверьте план</strong><br>Перед подтверждением проверьте исходное имя, итоговое имя и команды.</div>
+    <div class="card"><strong>4. Подтвердите передачу</strong><br>Только после подтверждения копия файла попадёт в очередь CutPilot. Исходник останется в <code>AI_Cut</code>.</div>
+    <p>Таймкод записывается через точку: <code>4.15</code> — 4 минуты 15 секунд; <code>01.23.23</code> — 1 час 23 минуты 23 секунды. Двоеточия не используются.</p>
+  </section>
+  <script src="/static/app.js" defer></script>
+</body>
+</html>

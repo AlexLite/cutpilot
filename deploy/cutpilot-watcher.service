@@ -1,0 +1,15 @@
+[Unit]
+Description=CutPilot FFmpeg folder watcher
+After=network.target smbd.service
+
+[Service]
+Type=simple
+User=root
+Environment=CUTPILOT_LOGO_H=/srv/logo/logo.png
+Environment=CUTPILOT_LOGO_V=/srv/logo/logo_v.png
+ExecStart=/usr/local/sbin/cutpilot-watcher
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

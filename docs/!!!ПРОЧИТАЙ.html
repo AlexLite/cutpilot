@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>AutoLogo — инструкция</title>
+  <title>CutPilot — инструкция</title>
   <style>
     :root { --bg:#101827; --panel:#172238; --panel2:#1d2b45; --text:#eef4ff; --muted:#a9b7ce; --blue:#65a9ff; --accent:#4fe0b6; --line:#2c3b56; --danger:#ffc469; }
     * { box-sizing:border-box; }
@@ -34,13 +34,14 @@
 </head>
 <body>
   <main class="wrap">
-    <header><div class="mark">AL</div><div><h1>AutoLogo</h1><p class="sub">Обработка видео из сетевой папки</p></div></header>
+    <header><div class="mark">CP</div><div><h1>CutPilot</h1><p class="sub">Обработка видео из сетевой папки</p></div></header>
+    <p><a class="button" href="http://cutpilot.sova.lan:8787/">Открыть AI-агент CutPilot</a></p>
     <nav class="tabs" aria-label="Разделы инструкции">
       <button class="tab active" data-tab="start">Быстрый старт</button><button class="tab gpt-tab" data-tab="gpt">Помощник GPT</button><button class="tab" data-tab="commands">Команды</button><button class="tab" data-tab="edit">Обрезка и склейка</button>
     </nav>
 
     <section class="pane active" id="start"><h2>Как пользоваться</h2>
-      <ol><li>Скопируйте видео в папку <code>autologo</code>.</li><li>После копирования не открывайте, не переносите и не удаляйте файл.</li><li>Через 10 секунд начнётся обработка.</li><li>Дождитесь нового файла с <code>_logo</code> или <code>_nologo</code>.</li></ol>
+      <ol><li>Скопируйте видео в папку <code>cutpilot</code>.</li><li>После копирования не открывайте, не переносите и не удаляйте файл.</li><li>Через 10 секунд начнётся обработка.</li><li>Дождитесь нового файла с <code>_logo</code> или <code>_nologo</code>.</li></ol>
       <div class="notice">Не запускайте исходный ролик из сетевой папки до появления результата: открытый файл блокирует обработку и защищает результат от повреждения.</div>
       <div class="grid"><div class="card"><strong>Без команд</strong>Логотип выбирается по ориентации. Разрешение и FPS сохраняются, видео кодируется на NVIDIA в высококачественном VBR-режиме с целевым средним битрейтом исходника.</div><div class="card"><strong>Тишина в конце</strong>Тишина тише −20 dB длительностью от 2 секунд сокращается до 1 секунды. <code>-nc</code> отключает это правило.</div><div class="card"><strong>Ошибки</strong>При проблеме рядом с исходником появляется <code>.error.txt</code>. Исходник остаётся в папке.</div><div class="card"><strong>Хранение</strong>Готовые файлы <code>_logo</code> и <code>_nologo</code> удаляются через 24 часа. Исходники и инструкции не удаляются.</div></div>
     </section>
@@ -58,7 +59,7 @@
     </section>
 
     <section class="pane" id="gpt"><h2>Помощник GPT</h2><p>Скопируйте этот промт в любой чат. Он сначала уточнит задачу, затем вернёт только готовое имя файла.</p><div class="actions"><button class="button" id="copy">Скопировать промт</button><a class="button secondary" href="https://chatgpt.com/" target="_blank" rel="noopener">ChatGPT</a><a class="button secondary" href="https://chat.deepseek.com/" target="_blank" rel="noopener">DeepSeek</a><a class="button secondary" href="https://chat.qwen.ai/" target="_blank" rel="noopener">Qwen</a><a class="button secondary" href="https://alice.yandex.ru/" target="_blank" rel="noopener">Яндекс GPT / Алиса</a></div><div class="status" id="status"></div>
-      <textarea id="prompt" readonly>Ты — помощник для самописного сервиса AutoLogo. Сервис получает видеофайл из сетевой папки и читает команды в квадратных скобках перед расширением: [cmd команды].
+      <textarea id="prompt" readonly>Ты — помощник для самописного сервиса CutPilot. Сервис получает видеофайл из сетевой папки и читает команды в квадратных скобках перед расширением: [cmd команды].
 
 Сначала спроси у пользователя исходное имя файла с расширением и что он хочет сделать. Если данных не хватает, задай короткий уточняющий вопрос. После этого верни ТОЛЬКО одно готовое имя файла, без пояснений и без кавычек.
 
