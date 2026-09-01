@@ -140,7 +140,9 @@ write_error(){
 }
 
 validate_audio(){
-  ffprobe -v error -select_streams a:0 -show_entries stream=codec_type -of default=nw=1:nk=1 "$1" 2>/dev/null | grep -qx audio || return 0
+  # HAS_AUDIO is populated by the single input probe. Keep the decode check,
+  # but do not start another ffprobe just to rediscover stream presence.
+  (( HAS_AUDIO )) || return 0
   ffmpeg -hide_banner -v error -xerror -i "$1" -map '0:a?' -vn -sn -dn -f null - >/dev/null 2>&1
 }
 
@@ -168,8 +170,8 @@ detect_tail_trim(){
   local input=$1 duration trace start end seek window
   TAIL_TRIM=""
   (( NO_CUT )) && return 0
-  ffprobe -v error -select_streams a:0 -show_entries stream=codec_type -of default=nw=1:nk=1 "$input" 2>/dev/null | grep -qx audio || return 0
-  duration=$(ffprobe -v error -show_entries format=duration -of default=nw=1:nk=1 "$input" 2>/dev/null) || return 0
+  (( HAS_AUDIO )) || return 0
+  duration=$SRC_DURATION
   # Only inspect the tail. A full audio decode pass is needlessly expensive
   # for long recordings when the decision concerns the final silence only.
   seek=$(awk -v d="$duration" 'BEGIN { v=d-60; if(v<0)v=0; printf "%.3f", v }')
