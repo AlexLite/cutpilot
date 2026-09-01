@@ -143,6 +143,21 @@ validate_output(){
   validate_audio "$1"
 }
 
+remux(){
+  local input=$1 output=$2 temporary="${output}.tmp.$$.$RANDOM.remux"
+  log "Remuxing[$WORKER_MODE]: $(basename "$input") -> $(basename "$output")"
+  if ffmpeg -nostdin -hide_banner -loglevel error -xerror -y -i "$input" \
+      -map 0 -c copy -map_metadata 0 -map_chapters 0 "$temporary" \
+      && validate_output "$temporary"; then
+    mv -f "$temporary" "$output" && rm -f "$input" "${input%.*}.error.txt" "$(state_file "$input")"
+    log "Created: $(basename "$output"); removed original: $(basename "$input")"
+    return 0
+  fi
+  rm -f "$temporary"
+  write_error "$input" "Remux failed; source retained for retry"
+  return 1
+}
+
 detect_tail_trim(){
   local input=$1 duration trace start end seek window
   TAIL_TRIM=""
@@ -282,6 +297,10 @@ process_file(){
   [[ -n "$OUT_CONTAINER" ]] && out_ext=$OUT_CONTAINER || out_ext=${ext,,}
   (( NO_LOGO )) && output="$WATCH_DIR/${CLEAN_STEM}_nologo.$out_ext" || output="$WATCH_DIR/${CLEAN_STEM}_logo.$out_ext"
   [[ "$output" == "$input" ]] && { write_error "$input" "Output name matches source name"; return 0; }
+  if (( NO_LOGO )) && [[ "$EDIT_MODE" == none ]] && (( TARGET_HEIGHT == 0 )) && (( TARGET_FPS == 0 )) && (( TARGET_BYTES == 0 )) && [[ "$VIDEO_CODEC" == h264 ]]; then
+    remux "$input" "$output"
+    return $?
+  fi
   if [[ "$EDIT_MODE" == none ]]; then detect_tail_trim "$input"; else TAIL_TRIM=""; fi
   build_filter "$mode" || { write_error "$input" "Logo file is missing"; return 0; }
   tmp="$output.tmp.$$.$RANDOM.$out_ext"
