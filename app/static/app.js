@@ -37,6 +37,17 @@ async function loadJobs() {
     const state = document.createElement('small');
     state.textContent = job.status === 'completed' ? `готово: ${job.message}` : job.status === 'failed' ? `ошибка: ${job.message}` : (job.progress ? `обрабатывается: ${job.progress}%` : 'обрабатывается');
     item.append(name, state);
+    if (job.status === 'processing') {
+      const cancel = document.createElement('button');
+      cancel.className = 'cancel';
+      cancel.textContent = 'Остановить';
+      cancel.onclick = async () => {
+        cancel.disabled = true;
+        await fetch('/api/jobs/cancel', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({id: job.id})});
+        loadJobs().catch(() => {});
+      };
+      item.append(cancel);
+    }
     return item;
   }));
 }

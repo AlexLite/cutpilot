@@ -94,6 +94,7 @@ class CutPilotService:
                         if separator:
                             values[key] = value
                 name = path.name.rsplit(".", 2)[0]
+                job_id = path.name.rsplit(".", 2)[1]
                 status = values.get("status", "processing")
                 progress = ""
                 try:
@@ -104,6 +105,7 @@ class CutPilotService:
                 if duration > 0 and out_time >= 0:
                     progress = str(min(100, max(0, round(out_time / 1_000_000 / duration * 100))))
                 result.append({
+                    "id": job_id,
                     "source": name,
                     "status": status,
                     "message": values.get("message", ""),
@@ -114,6 +116,16 @@ class CutPilotService:
             except OSError:
                 continue
         return sorted(result, key=lambda item: item["updated_at"], reverse=True)
+
+    def cancel_job(self, job_id: str) -> None:
+        if not isinstance(job_id, str) or not re.fullmatch(r"[0-9a-f]{64}", job_id):
+            raise JobError("Invalid job id")
+        progress_directory = self.cutpilot_directory / ".cutpilot-progress"
+        matches = list(progress_directory.glob(f"*.{job_id}.progress"))
+        if len(matches) != 1:
+            raise JobError("Job is missing or already finished")
+        marker = matches[0].with_name(matches[0].name + ".cancel")
+        marker.touch(exist_ok=False)
 
     def create_plan(self, source: str, task: str) -> dict[str, Any]:
         if not isinstance(task, str) or not 1 <= len(task.strip()) <= 4000:
@@ -209,7 +221,7 @@ def make_handler(service: CutPilotService):
             _json_response(self, HTTPStatus.NOT_FOUND, {"error": "Not found"})
 
         def do_POST(self) -> None:  # noqa: N802
-            if self.path not in {"/api/plan", "/api/jobs"}:
+            if self.path not in {"/api/plan", "/api/jobs", "/api/jobs/cancel"}:
                 _json_response(self, HTTPStatus.NOT_FOUND, {"error": "Not found"})
                 return
             try:
@@ -221,6 +233,9 @@ def make_handler(service: CutPilotService):
                     raise ValueError("JSON object expected")
                 if self.path == "/api/plan":
                     result = service.create_plan(payload.get("source"), payload.get("task"))
+                elif self.path == "/api/jobs/cancel":
+                    service.cancel_job(payload.get("id"))
+                    result = {"status": "cancelling"}
                 else:
                     result = service.confirm(payload.get("plan_id"), payload.get("confirmed"))
                 _json_response(self, HTTPStatus.OK, result)

@@ -30,6 +30,7 @@ processable_file(){
 }
 state_file(){ printf '%s/%s' "$STABLE_DIR" "$(printf '%s' "$1" | sha256sum | awk '{print $1}')"; }
 progress_file(){ printf '%s/%s.%s.progress' "$PROGRESS_DIR" "$(basename "$1")" "$(printf '%s' "$1" | sha256sum | awk '{print $1}')"; }
+cancel_file(){ printf '%s.cancel' "$1"; }
 write_progress(){
   local file=$1 status=$2 message=${3:-} temporary="${file}.tmp.$$"
   {
@@ -289,7 +290,7 @@ encode(){
     else
       common+=(-rc:v vbr -cq:v 22 -b:v 0)
     fi
-    ffmpeg "${common[@]}" "$output"
+    run_ffmpeg "${common[@]}" "$output"
   else
     [[ "$codec" == hevc ]] && common+=(-c:v hevc_vaapi -profile:v main -level:v 5.1) || common+=(-c:v h264_vaapi -profile:v high -level:v 5.1)
     if (( bitrate > 0 )); then
@@ -299,8 +300,25 @@ encode(){
     else
       common+=(-rc_mode CQP -qp 23)
     fi
-    ffmpeg -vaapi_device /dev/dri/renderD128 "${common[@]}" "$output"
+    run_ffmpeg -vaapi_device /dev/dri/renderD128 "${common[@]}" "$output"
   fi
+}
+
+run_ffmpeg(){
+  ffmpeg "$@" &
+  local pid=$! cancelled=0
+  while kill -0 "$pid" 2>/dev/null; do
+    if (( ! cancelled )) && [[ -f "$(cancel_file "$PROGRESS_FILE")" ]]; then
+      cancelled=1
+      write_progress "$PROGRESS_FILE" cancelling "Остановка по запросу пользователя"
+      kill -TERM "$pid" 2>/dev/null || true
+    fi
+    sleep 1
+  done
+  wait "$pid"
+  local result=$?
+  (( cancelled )) && return 130
+  return "$result"
 }
 
 process_file(){
@@ -328,7 +346,14 @@ process_file(){
   tmp="$output.tmp.$$.$RANDOM.$out_ext"
   log "Processing[$mode]: $name -> $(basename "$output")"
     if ! encode "$mode" "$input" "$tmp"; then
-      rm -f "$tmp"; write_error "$input" "Encoding failed; source retained for retry"; write_progress "$PROGRESS_FILE" failed "Encoding failed; source retained for retry"; return 1
+      rm -f "$tmp"
+      if [[ -f "$(cancel_file "$PROGRESS_FILE")" ]]; then
+        rm -f "$(cancel_file "$PROGRESS_FILE")"
+        write_progress "$PROGRESS_FILE" cancelled "Остановлено пользователем; исходник сохранён"
+      else
+        write_error "$input" "Encoding failed; source retained for retry"; write_progress "$PROGRESS_FILE" failed "Encoding failed; source retained for retry"
+      fi
+      return 1
   fi
   if ! validate_output "$tmp"; then
       rm -f "$tmp"; write_error "$input" "Output validation failed; source retained for retry"; write_progress "$PROGRESS_FILE" failed "Output validation failed; source retained for retry"; return 1
