@@ -159,7 +159,7 @@ validate_audio(){
 }
 
 validate_output(){
-  local video codec width height expected_codec
+  local video codec width height expected_codec format duration size
   video=$(ffprobe -v error -select_streams v:0 -show_entries stream=codec_name,width,height -of csv=p=0:s='|' "$1" 2>/dev/null) || return 1
   IFS='|' read -r codec width height <<< "$video"
   [[ "$codec" == h264 || "$codec" == hevc ]] || return 1
@@ -167,7 +167,10 @@ validate_output(){
   [[ "$codec" == "$expected_codec" ]] || return 1
   [[ "$width" =~ ^[0-9]+$ && "$height" =~ ^[0-9]+$ ]] || return 1
   (( TARGET_HEIGHT == 0 || height == TARGET_HEIGHT )) || return 1
-  ffprobe -v error -show_entries format=duration,size -of default=nw=1:nk=1 "$1" >/dev/null 2>&1 || return 1
+  format=$(ffprobe -v error -show_entries format=duration,size -of default=nw=1:nk=1 "$1" 2>/dev/null) || return 1
+  duration=$(sed -n '1p' <<< "$format"); size=$(sed -n '2p' <<< "$format")
+  [[ "$duration" =~ ^[0-9.]+$ && "$size" =~ ^[0-9]+$ && "$size" -gt 0 ]] || return 1
+  (( TARGET_BYTES == 0 || size <= TARGET_BYTES )) || return 1
   validate_audio "$1"
 }
 
