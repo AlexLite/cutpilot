@@ -1,0 +1,16 @@
+# Secrets and local runtime state
+.env
+.env.*
+!.env.example
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+data/
+logs/
+
+# Editors and OS files
+.idea/
+.vscode/
+Thumbs.db
+.DS_Store
