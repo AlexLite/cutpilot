@@ -29,14 +29,20 @@ processable_file(){
 }
 state_file(){ printf '%s/%s' "$STABLE_DIR" "$(printf '%s' "$1" | sha256sum | awk '{print $1}')"; }
 
-probe_video(){
-  SRC_WIDTH=$(ffprobe -v error -select_streams v:0 -show_entries stream=width -of default=nw=1:nk=1 "$1" 2>/dev/null | head -1)
-  SRC_HEIGHT=$(ffprobe -v error -select_streams v:0 -show_entries stream=height -of default=nw=1:nk=1 "$1" 2>/dev/null | head -1)
-  SRC_DURATION=$(ffprobe -v error -show_entries format=duration -of default=nw=1:nk=1 "$1" 2>/dev/null | head -1)
-  SRC_BITRATE=$(ffprobe -v error -select_streams v:0 -show_entries stream=bit_rate -of default=nw=1:nk=1 "$1" 2>/dev/null | head -1)
-  SRC_AUDIO_BITRATE=$(ffprobe -v error -select_streams a:0 -show_entries stream=bit_rate -of default=nw=1:nk=1 "$1" 2>/dev/null | head -1)
-  HAS_AUDIO=0
-  ffprobe -v error -select_streams a:0 -show_entries stream=codec_type -of default=nw=1:nk=1 "$1" 2>/dev/null | grep -qx audio && HAS_AUDIO=1
+  probe_video(){
+    local key value probe_output
+    SRC_WIDTH=""; SRC_HEIGHT=""; SRC_DURATION=""; SRC_BITRATE=0; SRC_AUDIO_BITRATE=192000; HAS_AUDIO=0
+    probe_output=$(/usr/local/libexec/cutpilot-probe "$1") || return 1
+    while IFS='=' read -r key value; do
+    case "$key" in
+      width) SRC_WIDTH=$value;;
+      height) SRC_HEIGHT=$value;;
+      duration) SRC_DURATION=$value;;
+      vbitrate) SRC_BITRATE=$value;;
+      abitrate) SRC_AUDIO_BITRATE=$value;;
+      has_audio) HAS_AUDIO=$value;;
+    esac
+    done <<< "$probe_output"
   [[ "$SRC_WIDTH" =~ ^[0-9]+$ && "$SRC_HEIGHT" =~ ^[0-9]+$ && "$SRC_DURATION" =~ ^[0-9.]+$ ]] || return 1
   [[ "$SRC_BITRATE" =~ ^[0-9]+$ ]] || SRC_BITRATE=0
   [[ "$SRC_AUDIO_BITRATE" =~ ^[0-9]+$ ]] || SRC_AUDIO_BITRATE=192000

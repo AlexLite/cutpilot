@@ -16,7 +16,8 @@ LXC.
    in this file only after the user explicitly supplies/authorizes it; never put
    it in Git, the unit file, or command arguments. Set `root:root` ownership and
    mode `0600`.
-5. Install `cutpilot-watcher.service` and `cutpilot.service` to `/etc/systemd/system/`, run
+5. Install `cutpilot-probe.py` as `/usr/local/libexec/cutpilot-probe` (mode `0755`), then
+   install `cutpilot-watcher.service` and `cutpilot.service` to `/etc/systemd/system/`, run
    `systemctl daemon-reload`, and enable/start it only after the above checks.
 6. Keep `CUTPILOT_HOST=127.0.0.1` unless a separately reviewed reverse proxy is
    configured. Verify `GET /api/files`, a fake-provider/local smoke test, and a
