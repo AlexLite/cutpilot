@@ -4,11 +4,12 @@ from __future__ import annotations
 
 from dataclasses import asdict
 import json
+import logging
 import os
 from pathlib import Path
+import re
 import secrets
-import threading
-import time
+import subprocess
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
@@ -16,6 +17,49 @@ from typing import Any
 from .ai import AIProviderError, OpenRouterAdapter
 from .commands import CommandValidationError, ValidatedPlan, validate_plan
 from .jobs import JobError, handoff, list_sources, source_metadata
+from .media import probe_media
+from .rules import simple_plan
+from .storage import PlanStore
+
+logger = logging.getLogger("cutpilot.server")
+
+
+def _correct_logo_intent(raw: Any, task: str) -> Any:
+    """Prevent a positive Russian logo request from becoming a no-logo command."""
+    if not isinstance(raw, dict) or not isinstance(raw.get("commands"), list):
+        return raw
+    lowered = task.casefold()
+    positive = bool(re.search(r"(?:с|добавь|добавить|оставь|оставить|наложи|наложить|нанеси|поставь|keep|with)\s*(?:лого|логотип)", lowered))
+    negative = bool(re.search(r"(?:без|убери|убрать|удали|удалить|remove)\s*(?:лого|логотип)", lowered))
+    if not positive or negative:
+        return raw
+    commands = [command for command in raw["commands"] if command not in {"-nl", "-nologo"}]
+    if len(commands) != len(raw["commands"]):
+        corrected = dict(raw)
+        corrected["commands"] = commands
+        logger.warning("Corrected logo intent: task=%r raw=%r corrected=%r", task, raw, corrected)
+        return corrected
+    return raw
+
+
+def _correct_edit_intent(raw: Any, task: str) -> Any:
+    """Turn a concatenate request into one validated crp+ command."""
+    if not isinstance(raw, dict) or not isinstance(raw.get("commands"), list):
+        return raw
+    if not re.search(r"(?:склей|склеить|соедини|соединить|объедини|объединить)", task.casefold()):
+        return raw
+    commands = raw["commands"]
+    edit_indexes = [index for index, command in enumerate(commands) if isinstance(command, str) and command.startswith(("-crp-", "-crp=", "-crp+"))]
+    if not edit_indexes:
+        return raw
+    ranges: list[str] = []
+    for index in edit_indexes:
+        ranges.extend(commands[index][5:].split("+"))
+    corrected = dict(raw)
+    corrected["commands"] = [command for index, command in enumerate(commands) if index not in edit_indexes]
+    corrected["commands"].insert(min(edit_indexes), "-crp+" + "+".join(ranges))
+    logger.warning("Corrected edit intent: task=%r raw=%r corrected=%r", task, raw, corrected)
+    return corrected
 
 
 class CutPilotService:
@@ -25,14 +69,8 @@ class CutPilotService:
         self.ai = ai or OpenRouterAdapter()
         self.ai_cut_directory = Path(ai_cut_directory or os.environ.get("CUTPILOT_AI_CUT_DIRECTORY", "/srv/cutpilot/AI_Cut"))
         self.cutpilot_directory = Path(cutpilot_directory or os.environ.get("CUTPILOT_DIRECTORY", "/srv/cutpilot"))
-        self.pending: dict[str, tuple[ValidatedPlan, Any, float]] = {}
-        self.pending_lock = threading.Lock()
-
-    def _purge_pending(self, now: float | None = None) -> None:
-        cutoff = (time.monotonic() if now is None else now) - self.PENDING_TTL_SECONDS
-        for plan_id, (_, _, created_at) in list(self.pending.items()):
-            if created_at < cutoff:
-                self.pending.pop(plan_id, None)
+        db_path = Path(os.environ.get("CUTPILOT_DB_PATH", str(self.cutpilot_directory / "cutpilot.db")))
+        self.store = PlanStore(db_path)
 
     def files(self) -> list[dict[str, Any]]:
         return [
@@ -40,22 +78,82 @@ class CutPilotService:
             for item in list_sources(self.ai_cut_directory)
         ]
 
+    def jobs(self) -> list[dict[str, Any]]:
+        progress_directory = self.cutpilot_directory / ".cutpilot-progress"
+        if not progress_directory.is_dir():
+            return []
+        result = []
+        for path in progress_directory.glob("*.progress"):
+            try:
+                values = {}
+                for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+                    key, separator, value = line.partition("=")
+                    if separator:
+                        values[key] = value
+                ffmpeg_progress = path.with_name(path.name + ".ffmpeg")
+                if ffmpeg_progress.is_file():
+                    for line in ffmpeg_progress.read_text(encoding="utf-8", errors="replace").splitlines():
+                        key, separator, value = line.partition("=")
+                        if separator:
+                            values[key] = value
+                name = path.name.rsplit(".", 2)[0]
+                job_id = path.name.rsplit(".", 2)[1]
+                status = values.get("status", "processing")
+                progress = ""
+                try:
+                    duration = float(values.get("duration", "0") or 0)
+                    out_time = float(values.get("out_time_ms", "0") or 0)
+                except ValueError:
+                    duration = out_time = 0
+                if duration > 0 and out_time >= 0:
+                    progress = str(min(100, max(0, round(out_time / 1_000_000 / duration * 100))))
+                result.append({
+                    "id": job_id,
+                    "source": name,
+                    "status": status,
+                    "message": values.get("message", ""),
+                    "updated_at": int(values.get("updated_at", "0") or 0),
+                    "progress": progress,
+                    "out_time_ms": values.get("out_time_ms", ""),
+                })
+            except OSError:
+                continue
+        return sorted(result, key=lambda item: item["updated_at"], reverse=True)
+
+    def cancel_job(self, job_id: str) -> None:
+        if not isinstance(job_id, str) or not re.fullmatch(r"[0-9a-f]{64}", job_id):
+            raise JobError("Invalid job id")
+        progress_directory = self.cutpilot_directory / ".cutpilot-progress"
+        matches = list(progress_directory.glob(f"*.{job_id}.progress"))
+        if len(matches) != 1:
+            raise JobError("Job is missing or already finished")
+        marker = matches[0].with_name(matches[0].name + ".cancel")
+        marker.touch(exist_ok=False)
+
     def create_plan(self, source: str, task: str) -> dict[str, Any]:
         if not isinstance(task, str) or not 1 <= len(task.strip()) <= 4000:
             raise CommandValidationError("Task must contain 1-4000 characters")
         selected = source_metadata(self.ai_cut_directory, source)
-        raw = self.ai.create_plan(
-            selected.name,
-            {"size_bytes": selected.size},
-            task.strip(),
-        )
-        plan = validate_plan(selected.name, raw)
+        normalized_task = task.strip()
+        raw = simple_plan(normalized_task) if isinstance(self.ai, OpenRouterAdapter) else None
+        if raw is not None:
+            logger.info("Using local rule plan: task=%r plan=%r", normalized_task, raw)
+        else:
+            metadata: dict[str, Any] = {"size_bytes": selected.size}
+            try:
+                metadata.update(probe_media(self.ai_cut_directory / selected.name))
+            except (OSError, StopIteration, TypeError, ValueError, subprocess.SubprocessError) as exc:
+                logger.warning("Media probe unavailable for %s: %s", selected.name, exc)
+            raw = self.ai.create_plan(selected.name, metadata, normalized_task)
+        raw = _correct_edit_intent(raw, task.strip())
+        raw = _correct_logo_intent(raw, task.strip())
+        try:
+            plan = validate_plan(selected.name, raw)
+        except CommandValidationError:
+            logger.exception("AI plan validation failed: source=%s raw=%r", selected.name, raw)
+            raise
         plan_id = secrets.token_urlsafe(24)
-        with self.pending_lock:
-            self._purge_pending()
-            if len(self.pending) >= 100:
-                self.pending.clear()
-            self.pending[plan_id] = (plan, selected, time.monotonic())
+        self.store.save(plan_id, plan, selected, self.PENDING_TTL_SECONDS)
         return {"plan_id": plan_id, "source_filename": plan.source_filename, "staged_filename": plan.staged_filename, "commands": list(plan.commands), "summary": plan.summary}
 
     def confirm(self, plan_id: str, confirmed: bool) -> dict[str, str]:
@@ -63,14 +161,11 @@ class CutPilotService:
             raise JobError("Explicit confirmation is required")
         if not isinstance(plan_id, str) or not 1 <= len(plan_id) <= 200:
             raise JobError("Invalid plan id")
-        with self.pending_lock:
-            self._purge_pending()
-            item = self.pending.get(plan_id)
-            if item is None:
-                raise JobError("Plan is missing or has already been used")
-            plan, selected, _ = item
-            name = handoff(self.ai_cut_directory, self.cutpilot_directory, plan, selected)
-            self.pending.pop(plan_id, None)
+        item = self.store.take(plan_id)
+        if item is None:
+            raise JobError("Plan is missing or has already been used")
+        plan, selected = item
+        name = handoff(self.ai_cut_directory, self.cutpilot_directory, plan, selected)
         return {"status": "queued", "filename": name}
 
 
@@ -90,11 +185,26 @@ def make_handler(service: CutPilotService):
         server_version = "CutPilot/0.1"
 
         def do_GET(self) -> None:  # noqa: N802
+            if self.path == "/health/live":
+                _json_response(self, HTTPStatus.OK, {"status": "ok"})
+                return
+            if self.path == "/health/ready":
+                ai_ready = bool(getattr(service.ai, "api_key", "") and getattr(service.ai, "model", ""))
+                files_ready = service.ai_cut_directory.is_dir()
+                status = HTTPStatus.OK if ai_ready and files_ready else HTTPStatus.SERVICE_UNAVAILABLE
+                _json_response(self, status, {"status": "ok" if status == HTTPStatus.OK else "not_ready", "ai_cut": files_ready, "ai": ai_ready})
+                return
             if self.path == "/api/files":
                 try:
                     _json_response(self, HTTPStatus.OK, {"files": service.files()})
                 except OSError:
                     _json_response(self, HTTPStatus.INTERNAL_SERVER_ERROR, {"error": "AI_Cut is not available"})
+                return
+            if self.path == "/api/jobs":
+                try:
+                    _json_response(self, HTTPStatus.OK, {"jobs": service.jobs()})
+                except OSError:
+                    _json_response(self, HTTPStatus.INTERNAL_SERVER_ERROR, {"error": "Queue is not available"})
                 return
             if self.path in {"/", "/index.html"}:
                 body = (Path(__file__).parent / "static" / "index.html").read_bytes()
@@ -120,7 +230,7 @@ def make_handler(service: CutPilotService):
             _json_response(self, HTTPStatus.NOT_FOUND, {"error": "Not found"})
 
         def do_POST(self) -> None:  # noqa: N802
-            if self.path not in {"/api/plan", "/api/jobs"}:
+            if self.path not in {"/api/plan", "/api/jobs", "/api/jobs/cancel"}:
                 _json_response(self, HTTPStatus.NOT_FOUND, {"error": "Not found"})
                 return
             try:
@@ -132,6 +242,9 @@ def make_handler(service: CutPilotService):
                     raise ValueError("JSON object expected")
                 if self.path == "/api/plan":
                     result = service.create_plan(payload.get("source"), payload.get("task"))
+                elif self.path == "/api/jobs/cancel":
+                    service.cancel_job(payload.get("id"))
+                    result = {"status": "cancelling"}
                 else:
                     result = service.confirm(payload.get("plan_id"), payload.get("confirmed"))
                 _json_response(self, HTTPStatus.OK, result)
@@ -147,6 +260,10 @@ def make_handler(service: CutPilotService):
 
 
 def run() -> None:
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    )
     host = os.environ.get("CUTPILOT_HOST", "127.0.0.1")
     port = int(os.environ.get("CUTPILOT_PORT", "8787"))
     service = CutPilotService()

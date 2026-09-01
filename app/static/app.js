@@ -22,6 +22,36 @@ async function loadFiles() {
   if (!data.files.length) show('В AI_Cut пока нет видео.');
 }
 
+async function loadJobs() {
+  const response = await fetch('/api/jobs');
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || 'Не удалось получить очередь');
+  const queue = document.querySelector('#queue');
+  const list = document.querySelector('#queue-list');
+  queue.hidden = !data.jobs.length;
+  list.replaceChildren(...data.jobs.slice(0, 20).map((job) => {
+    const item = document.createElement('div');
+    item.className = 'queue-item';
+    const name = document.createElement('span');
+    name.textContent = job.source;
+    const state = document.createElement('small');
+    state.textContent = job.status === 'completed' ? `готово: ${job.message}` : job.status === 'failed' ? `ошибка: ${job.message}` : (job.progress ? `обрабатывается: ${job.progress}%` : 'обрабатывается');
+    item.append(name, state);
+    if (job.status === 'processing') {
+      const cancel = document.createElement('button');
+      cancel.className = 'cancel';
+      cancel.textContent = 'Остановить';
+      cancel.onclick = async () => {
+        cancel.disabled = true;
+        await fetch('/api/jobs/cancel', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({id: job.id})});
+        loadJobs().catch(() => {});
+      };
+      item.append(cancel);
+    }
+    return item;
+  }));
+}
+
 document.querySelector('#plan').onclick = async () => {
   show('Запрашиваю план…');
   review.hidden = true;
@@ -59,3 +89,5 @@ confirmButton.onclick = async () => {
 };
 
 loadFiles().catch(error => show(`Ошибка списка файлов: ${error.message}`));
+loadJobs().catch(() => {});
+setInterval(() => loadJobs().catch(() => {}), 5000);

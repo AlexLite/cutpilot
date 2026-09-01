@@ -48,7 +48,9 @@ def _validate_edit(token: str) -> None:
     while rest:
         match = _EDIT.match(rest)
         if not match:
-            raise CommandValidationError(f"Invalid edit range: {token}")
+            raise CommandValidationError(
+                f"Invalid edit range: {token}; use MM.SS-MM.SS, for example -crp-00.00-00.10"
+            )
         start = _time_to_seconds(match.group("start"))
         end = _time_to_seconds(match.group("end"))
         if end <= start:
@@ -68,6 +70,28 @@ def _validate_edit(token: str) -> None:
             if start < previous_end:
                 raise CommandValidationError("Removed ranges must be chronological and non-overlapping")
             previous_end = end
+
+
+def _normalize_edit_token(token: object) -> object:
+    """Accept the common AI shorthand ``-crp-0-10`` as seconds."""
+    if not isinstance(token, str):
+        return token
+    prefix = next((value for value in ("-crp-", "-crp=", "-crp+") if token.startswith(value)), None)
+    if prefix is None:
+        return token
+    ranges = token[len(prefix):].split("+")
+    normalized: list[str] = []
+    for item in ranges:
+        match = re.fullmatch(r"([0-9]+)-([0-9]+)", item)
+        if not match:
+            return token
+        start, end = (int(value) for value in match.groups())
+        def timestamp(value: int) -> str:
+            hours, remainder = divmod(value, 3600)
+            minutes, seconds = divmod(remainder, 60)
+            return f"{hours:02d}.{minutes:02d}.{seconds:02d}" if hours else f"{minutes:02d}.{seconds:02d}"
+        normalized.append(f"{timestamp(start)}-{timestamp(end)}")
+    return prefix + "+".join(normalized)
 
 
 def validate_commands(commands: object) -> tuple[str, ...]:
@@ -105,6 +129,11 @@ def validate_commands(commands: object) -> tuple[str, ...]:
             if not 1 <= fps <= 60:
                 raise CommandValidationError("FPS must be between 1 and 60")
         elif re.fullmatch(r"-[1-9][0-9]*(?:gb|mb)", command):
+            number = int(command[1:-2])
+            unit = command[-2:]
+            size_bytes = number * (1_000_000_000 if unit == "gb" else 1_000_000)
+            if not 1_000_000 <= size_bytes <= 2_000_000_000_000:
+                raise CommandValidationError("Target size must be between 1mb and 2000gb")
             pass
         else:
             raise CommandValidationError(f"Unknown CutPilot command: {command}")
@@ -172,8 +201,11 @@ def validate_plan(source_filename: object, raw_plan: object) -> ValidatedPlan:
     declared_source = raw_plan.get("source_filename", source)
     if declared_source != source:
         raise CommandValidationError("AI plan source filename does not match the selected file")
-    commands = validate_commands(raw_plan.get("commands", []))
+    raw_commands = raw_plan.get("commands", [])
+    if isinstance(raw_commands, list):
+        raw_commands = [_normalize_edit_token(command) for command in raw_commands]
+    commands = validate_commands(raw_commands)
     summary = raw_plan.get("summary", "")
-    if not isinstance(summary, str) or len(summary) > 500:
+    if not isinstance(summary, str) or len(summary) > 160:
         raise CommandValidationError("AI plan summary is invalid")
     return ValidatedPlan(source, commands, summary.strip(), build_staged_filename(source, commands))
