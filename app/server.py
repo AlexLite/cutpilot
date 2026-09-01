@@ -138,6 +138,15 @@ def make_handler(service: CutPilotService):
         server_version = "CutPilot/0.1"
 
         def do_GET(self) -> None:  # noqa: N802
+            if self.path == "/health/live":
+                _json_response(self, HTTPStatus.OK, {"status": "ok"})
+                return
+            if self.path == "/health/ready":
+                ai_ready = bool(getattr(service.ai, "api_key", "") and getattr(service.ai, "model", ""))
+                files_ready = service.ai_cut_directory.is_dir()
+                status = HTTPStatus.OK if ai_ready and files_ready else HTTPStatus.SERVICE_UNAVAILABLE
+                _json_response(self, status, {"status": "ok" if status == HTTPStatus.OK else "not_ready", "ai_cut": files_ready, "ai": ai_ready})
+                return
             if self.path == "/api/files":
                 try:
                     _json_response(self, HTTPStatus.OK, {"files": service.files()})
