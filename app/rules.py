@@ -8,7 +8,7 @@ from typing import Any
 
 _TIME = r"\d{1,2}(?:\.\d{2}){1,2}"
 _RANGE = rf"({_TIME})\s*[-–]\s*({_TIME})"
-_NOISE = re.compile(r"\b(?:сделай|сделать|обработай|обработать|сожми|сжать|обрез\w*|видео|файл|формат|разрешение|размер|до|примерно|и|в|на|по|для|мне|пожалуйста|без|наложи|наложить|склей|склеить|соедини|соединить|объедини|объединить|оставь|оставить|таймкод\w*|логотип\w*|лого|cut)\b", re.I)
+_NOISE = re.compile(r"\b(?:сделай|сделать|обработай|обработать|сожми|сжать|обрез\w*|видео|файл|формат|разрешение|размер|до|примерно|и|в|на|по|для|мне|пожалуйста|без|наложи|наложить|склей|склеить|соедини|соединить|объедини|объединить|оставь|оставить|таймкод\w*|мегабайт\w*|гигабайт\w*|логотип\w*|лого|cut)\b", re.I)
 _EDGE_CUT = re.compile(r"(?:вырежи|вырезать|обрезать|удали|удалить|убери|убрать|cut).*?(?:перв\w*|вначале|в\s+начале?)\s+(\d+)\s*(секунд\w*|минут\w*).*?(?:в\s*конц\w*|последн\w*)\s+(\d+)\s*(секунд\w*|минут\w*)", re.I)
 _EDGE_CUT_ALT = re.compile(r"(?:вырежи|вырезать|обрезать|удали|удалить|убери|убрать|cut).*?вначале\s+(\d+)\s+(секунд\w*).*?(\d+)\s+(секунд\w*)\s+в\s+конце", re.I)
 
@@ -58,8 +58,8 @@ def simple_plan(task: str, duration_seconds: float | str | None = None) -> dict[
     for match in re.finditer(r"\b([1-5]?\d|60)\s*(?:fps|кадр(?:а|ов)?\s*/\s*с)\b", text):
         commands.append(f"-{match.group(1)}fps")
         consumed = consumed.replace(match.group(0), " ")
-    for match in re.finditer(r"\b([1-9]\d*)\s*(mb|gb|мб|гб)\b", text):
-        unit = {"мб": "mb", "гб": "gb"}.get(match.group(2), match.group(2))
+    for match in re.finditer(r"\b([1-9]\d*)\s*(mb|gb|мб|гб|мегабайт\w*|гигабайт\w*)\b", text):
+        unit = "gb" if match.group(2).startswith(("gb", "гб", "гигабайт")) else "mb"
         commands.append(f"-{match.group(1)}{unit}")
         consumed = consumed.replace(match.group(0), " ")
 

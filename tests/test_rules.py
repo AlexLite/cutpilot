@@ -29,6 +29,9 @@ class RulePlanTests(unittest.TestCase):
         plan = simple_plan("Обрезать по таймкоду 1.25-1.55 и наложить лого")
         self.assertEqual(plan["commands"], ["-nl", "-crp-1.25-1.55"])
 
+    def test_russian_file_size_unit_is_normalized(self):
+        self.assertEqual(simple_plan("сожми до 100 Мегабайт")["commands"], ["-100mb"])
+
 
 if __name__ == "__main__":
     unittest.main()
