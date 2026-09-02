@@ -12,6 +12,8 @@ function applySimpleCopy() {
   document.querySelector('.side-title').textContent = 'Локальный AI видеоредактор';
   document.querySelector('.side-note')?.remove();
   document.querySelector('.topbar h1').textContent = 'Напиши что надо, сделаю сам';
+  document.querySelector('.welcome p').textContent = 'Опишите задачу обычным языком — я отправлю в работу.';
+  document.querySelector('#plan').textContent = 'В работу';
   document.querySelector('#instructions').innerHTML = `
     <div class="welcome"><h2>Как работать с видео</h2><p>Сначала положите видео в папку, затем напишите, что нужно сделать.</p></div>
     <div class="instruction-card"><h3>1. Скопируйте видео</h3><p>Скопируйте нужный видеофайл в папку <code>AI_Cut</code>.</p></div>
