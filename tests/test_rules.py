@@ -25,6 +25,10 @@ class RulePlanTests(unittest.TestCase):
         plan = simple_plan("Обрезать вначале 10 секунд и 19 секунд в конце, сжать видео до 100 Mb", 181.04)
         self.assertEqual(plan["commands"], ["-crp-00.00-00.10+02.42-03.01", "-100mb"])
 
+    def test_trim_by_timecode_is_local_and_keeps_explicit_logo(self):
+        plan = simple_plan("Обрезать по таймкоду 1.25-1.55 и наложить лого")
+        self.assertEqual(plan["commands"], ["-crp-1.25-1.55"])
+
 
 if __name__ == "__main__":
     unittest.main()
