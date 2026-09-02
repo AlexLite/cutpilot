@@ -290,11 +290,24 @@ encode(){
   common+=(-filter_complex "$FILTER" -map '[v]')
   [[ -n "$AUDIO_MAP" ]] && common+=(-map "$AUDIO_MAP")
   common+=(-map_metadata 0 -map_chapters 0)
-  (( TARGET_FPS > 0 )) && common+=(-r "$TARGET_FPS") || common+=(-fps_mode passthrough)
+  if (( TARGET_FPS > 0 )); then
+    common+=(-r "$TARGET_FPS")
+  elif [[ "$mode" != cpu ]]; then
+    common+=(-fps_mode passthrough)
+  fi
   if (( TARGET_BYTES > 0 )); then common+=(-c:a aac -b:a 128k)
   elif (( AUDIO_REENCODE )); then common+=(-c:a aac -b:a "$SRC_AUDIO_BITRATE")
   else common+=(-c:a copy); fi
-  if [[ "$mode" == nvenc ]]; then
+  if [[ "$mode" == cpu ]]; then
+    common+=(-pix_fmt yuv420p -shortest)
+    if [[ "$codec" == hevc ]]; then
+      common+=(-c:v libx265 -preset fast)
+    else
+      common+=(-c:v libx264 -preset fast)
+    fi
+    if (( bitrate > 0 )); then common+=(-b:v "$bitrate"); else common+=(-crf 23); fi
+    run_ffmpeg "${common[@]}" "$output"
+  elif [[ "$mode" == nvenc ]]; then
     # Let NVENC select a valid level. 4K/50fps exceeds H.264 Level 5.1 and
     # requires Level 5.2, while ordinary inputs still resolve to Level 5.1.
     [[ "$codec" == hevc ]] && common+=(-c:v hevc_nvenc -profile:v main) || common+=(-c:v h264_nvenc -profile:v high)
