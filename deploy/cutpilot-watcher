@@ -3,11 +3,12 @@
 set -u
 shopt -s nocasematch
 
-WATCH_DIR=/srv/cutpilot
+WATCH_DIR=${CUTPILOT_WATCH_DIR:-/srv/cutpilot}
 LOGO_H=${CUTPILOT_LOGO_H:-/srv/logo/logo.png}
 LOGO_V=${CUTPILOT_LOGO_V:-/srv/logo/logo_v.png}
-LOG_FILE=/var/log/cutpilot-watcher.log
-RUN_DIR=/run/cutpilot
+LOG_FILE=${CUTPILOT_LOG_FILE:-/var/log/cutpilot-watcher.log}
+RUN_DIR=${CUTPILOT_RUN_DIR:-/run/cutpilot}
+PROBE_BIN=${CUTPILOT_PROBE_BIN:-/usr/local/libexec/cutpilot-probe}
 STABLE_DIR=$RUN_DIR/stable
 LOCK_DIR=$RUN_DIR/locks
 PROGRESS_DIR=$WATCH_DIR/.cutpilot-progress
@@ -49,7 +50,7 @@ cleanup_progress(){
   probe_video(){
     local key value probe_output
     SRC_WIDTH=""; SRC_HEIGHT=""; SRC_DURATION=""; SRC_BITRATE=0; SRC_AUDIO_BITRATE=192000; HAS_AUDIO=0
-    probe_output=$(/usr/local/libexec/cutpilot-probe "$1") || return 1
+    probe_output=$("$PROBE_BIN" "$1") || return 1
     while IFS='=' read -r key value; do
     case "$key" in
       width) SRC_WIDTH=$value;;
