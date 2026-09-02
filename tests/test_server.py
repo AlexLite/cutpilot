@@ -21,6 +21,11 @@ class LogoIntentTests(unittest.TestCase):
         corrected = _correct_edit_intent(raw, "склей 0.15-0.50+1.25-2.13 и наложи лого")
         self.assertEqual(corrected["commands"], ["-crp+00.15-00.50+01.25-02.13", "-nl"])
 
+    def test_remove_request_combines_multiple_edit_commands(self):
+        raw = {"commands": ["-crp-00.00-00.15", "-crp-02.50-03.00"], "summary": "remove"}
+        corrected = _correct_edit_intent(raw, "вырежи первые 15 секунд и последние 10 секунд")
+        self.assertEqual(corrected["commands"], ["-crp-00.00-00.15+02.50-03.00"])
+
 
 class UploadTests(unittest.TestCase):
     def test_upload_writes_video_atomically_and_rejects_overwrite(self):

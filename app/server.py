@@ -45,21 +45,25 @@ def _correct_logo_intent(raw: Any, task: str) -> Any:
 
 
 def _correct_edit_intent(raw: Any, task: str) -> Any:
-    """Turn a concatenate request into one validated crp+ command."""
+    """Turn multiple AI edit commands into one worker-compatible command."""
     if not isinstance(raw, dict) or not isinstance(raw.get("commands"), list):
-        return raw
-    if not re.search(r"(?:склей|склеить|соедини|соединить|объедини|объединить)", task.casefold()):
         return raw
     commands = raw["commands"]
     edit_indexes = [index for index, command in enumerate(commands) if isinstance(command, str) and command.startswith(("-crp-", "-crp=", "-crp+"))]
-    if not edit_indexes:
+    if len(edit_indexes) < 2:
         return raw
+    concatenate = bool(re.search(r"(?:склей|склеить|соедини|соединить|объедини|объединить)", task.casefold()))
+    prefixes = {commands[index][:5] for index in edit_indexes}
+    if "-crp=" in prefixes:
+        logger.warning("Cannot combine multiple keep edit commands: task=%r raw=%r", task, raw)
+        return raw
+    prefix = "-crp+" if concatenate or "-crp+" in prefixes else "-crp-"
     ranges: list[str] = []
     for index in edit_indexes:
         ranges.extend(commands[index][5:].split("+"))
     corrected = dict(raw)
     corrected["commands"] = [command for index, command in enumerate(commands) if index not in edit_indexes]
-    corrected["commands"].insert(min(edit_indexes), "-crp+" + "+".join(ranges))
+    corrected["commands"].insert(min(edit_indexes), prefix + "+".join(ranges))
     logger.warning("Corrected edit intent: task=%r raw=%r corrected=%r", task, raw, corrected)
     return corrected
 
