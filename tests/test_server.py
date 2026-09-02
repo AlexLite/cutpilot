@@ -16,6 +16,10 @@ class LogoIntentTests(unittest.TestCase):
         raw = {"commands": ["-nologo"], "summary": "remove"}
         self.assertEqual(_correct_logo_intent(raw, "просчитай с лого")["commands"], [])
 
+    def test_latin_c_logo_request_removes_no_logo_command(self):
+        raw = {"commands": ["-nl"], "summary": "overlay"}
+        self.assertEqual(_correct_logo_intent(raw, "перекодируй в mov c лого")["commands"], [])
+
     def test_negative_logo_request_is_not_changed(self):
         raw = {"commands": ["-nologo"], "summary": "remove"}
         self.assertEqual(_correct_logo_intent(raw, "убери логотип")["commands"], ["-nologo"])

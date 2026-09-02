@@ -38,6 +38,9 @@ class RulePlanTests(unittest.TestCase):
     def test_reencode_to_mov_with_logo_is_understood(self):
         self.assertEqual(simple_plan("перекодируй в mov с лого")["commands"], ["-mov"])
 
+    def test_latin_c_before_logo_means_keep_logo(self):
+        self.assertEqual(simple_plan("перекодируй в mov c лого")["commands"], ["-mov"])
+
 
 if __name__ == "__main__":
     unittest.main()
