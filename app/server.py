@@ -80,7 +80,7 @@ class CutPilotService:
 
     def jobs(self) -> list[dict[str, Any]]:
         history = {item["staged_filename"]: item for item in self.store.list_jobs()}
-        progress_directory = self.cutpilot_directory / ".cutpilot-progress"
+        progress_directory = Path(os.environ.get("CUTPILOT_PROGRESS_DIR", str(self.cutpilot_directory / ".cutpilot-progress")))
         if not progress_directory.is_dir():
             return list(history.values())
         result = []
@@ -132,7 +132,7 @@ class CutPilotService:
     def cancel_job(self, job_id: str) -> None:
         if not isinstance(job_id, str) or not re.fullmatch(r"[0-9a-f]{64}", job_id):
             raise JobError("Invalid job id")
-        progress_directory = self.cutpilot_directory / ".cutpilot-progress"
+        progress_directory = Path(os.environ.get("CUTPILOT_PROGRESS_DIR", str(self.cutpilot_directory / ".cutpilot-progress")))
         matches = list(progress_directory.glob(f"*.{job_id}.progress"))
         if len(matches) != 1:
             raise JobError("Job is missing or already finished")

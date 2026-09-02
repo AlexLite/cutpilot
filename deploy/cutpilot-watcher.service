@@ -7,8 +7,7 @@ Type=simple
 User=root
 Environment=CUTPILOT_LOGO_H=/srv/logo/logo.png
 Environment=CUTPILOT_LOGO_V=/srv/logo/logo_v.png
-Environment=CUTPILOT_WATCH_DIR=/srv/cutpilot/AI_Cut
-Environment=CUTPILOT_PROGRESS_DIR=/srv/cutpilot/.cutpilot-progress
+Environment=CUTPILOT_PROGRESS_DIR=/var/lib/cutpilot/progress
 Environment=CUTPILOT_WORKER_MODE=nvenc
 ExecStart=/usr/local/sbin/cutpilot-watcher
 Restart=always

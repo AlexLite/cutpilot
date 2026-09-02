@@ -27,15 +27,19 @@ async function loadJobs() {
   const data = await response.json();
   if (!response.ok) throw new Error(data.error || 'Не удалось получить очередь');
   const queue = document.querySelector('#queue');
-  const list = document.querySelector('#queue-list');
-  queue.hidden = !data.jobs.length;
-  list.replaceChildren(...data.jobs.slice(0, 20).map((job) => {
+  const activeQueue = document.querySelector('#active-queue');
+  const historyQueue = document.querySelector('#history-queue');
+  const activeList = document.querySelector('#active-list');
+  const historyList = document.querySelector('#history-list');
+  const active = data.jobs.filter((job) => ['queued', 'processing', 'cancelling'].includes(job.status));
+  const history = data.jobs.filter((job) => !['queued', 'processing', 'cancelling'].includes(job.status));
+  const renderJob = (job) => {
     const item = document.createElement('div');
     item.className = 'queue-item';
     const name = document.createElement('span');
     name.textContent = job.source;
     const state = document.createElement('small');
-    state.textContent = job.status === 'completed' ? `готово: ${job.message}` : job.status === 'failed' ? `ошибка: ${job.message}` : (job.progress ? `обрабатывается: ${job.progress}%` : 'обрабатывается');
+    state.textContent = job.status === 'completed' ? `готово: ${job.message}` : job.status === 'failed' ? `ошибка: ${job.message}` : job.status === 'cancelled' ? 'отменено' : job.status === 'queued' ? 'в очереди' : job.status === 'cancelling' ? 'останавливается' : (job.progress ? `обрабатывается: ${job.progress}%` : 'обрабатывается');
     item.append(name, state);
     if (job.status === 'processing') {
       const cancel = document.createElement('button');
@@ -49,7 +53,12 @@ async function loadJobs() {
       item.append(cancel);
     }
     return item;
-  }));
+  };
+  activeList.replaceChildren(...active.slice(0, 20).map(renderJob));
+  historyList.replaceChildren(...history.slice(0, 20).map(renderJob));
+  activeQueue.hidden = !active.length;
+  historyQueue.hidden = !history.length;
+  queue.hidden = !active.length && !history.length;
 }
 
 document.querySelector('#plan').onclick = async () => {
