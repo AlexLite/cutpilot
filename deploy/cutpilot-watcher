@@ -15,7 +15,7 @@ PROGRESS_DIR=${CUTPILOT_PROGRESS_DIR:-$WATCH_DIR/.cutpilot-progress}
 PROGRESS_RETENTION_DAYS=${CUTPILOT_PROGRESS_RETENTION_DAYS:-7}
 STABLE_DELAY=${CUTPILOT_STABLE_DELAY:-10}
 WORKER_MODE=${CUTPILOT_WORKER_MODE:-nvenc}
-AUTO_TAIL_CUT=${CUTPILOT_AUTO_TAIL_CUT:-0}
+AUTO_TAIL_CUT=${CUTPILOT_AUTO_TAIL_CUT:-1}
 
 mkdir -p "$WATCH_DIR" "$RUN_DIR" "$STABLE_DIR" "$LOCK_DIR" "$PROGRESS_DIR"
 # Locks are empty directories. A service restart can interrupt a worker before its
@@ -77,8 +77,8 @@ cleanup_progress(){
 
 reset_options(){
   OUT_CONTAINER=""; VIDEO_CODEC=h264; TARGET_HEIGHT=0; TARGET_FPS=0; TARGET_BYTES=0
-  NO_LOGO=0; NO_CUT=1; CMD_ERROR=""; COMMAND_USED=0
-  (( AUTO_TAIL_CUT == 1 )) && NO_CUT=0
+  NO_LOGO=0; NO_CUT=0; CMD_ERROR=""; COMMAND_USED=0
+  (( AUTO_TAIL_CUT == 1 )) || NO_CUT=1
   EDIT_MODE=none; EDIT_STARTS=(); EDIT_ENDS=()
 }
 
@@ -137,7 +137,6 @@ parse_commands(){
     elif [[ "$compact" == -nl* ]]; then NO_LOGO=1; compact=${compact:3}
     elif [[ "$compact" == -nocut* ]]; then NO_CUT=1; compact=${compact:6}
     elif [[ "$compact" == -nc* ]]; then NO_CUT=1; compact=${compact:3}
-    elif [[ "$compact" == -autocut* ]]; then NO_CUT=0; compact=${compact:7}
     elif [[ "$compact" == -hevc* ]]; then VIDEO_CODEC=hevc; compact=${compact:5}
     elif [[ "$compact" == -mp4* ]]; then
       [[ -z "$OUT_CONTAINER" || "$OUT_CONTAINER" == mp4 ]] || { CMD_ERROR="Only one output container is allowed"; return 1; }

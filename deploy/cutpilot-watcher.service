@@ -13,7 +13,7 @@ Environment=CUTPILOT_LOGO_V=/srv/logo/logo_v.png
 Environment=CUTPILOT_LOG_FILE=/var/lib/cutpilot/watcher.log
 Environment=CUTPILOT_PROGRESS_DIR=/var/lib/cutpilot/progress
 Environment=CUTPILOT_WORKER_MODE=nvenc
-Environment=CUTPILOT_AUTO_TAIL_CUT=0
+Environment=CUTPILOT_AUTO_TAIL_CUT=1
 ExecStart=/usr/local/sbin/cutpilot-watcher
 Restart=always
 RestartSec=3

@@ -42,13 +42,13 @@ def _with_increment(filename: str, number: int) -> str:
     return f"{stem}{path.suffix}"
 
 
-def with_auto_tail(filename: str) -> str:
-    """Mark API handoffs so the watcher can distinguish them from direct drops."""
+def with_no_auto_tail(filename: str) -> str:
+    """Mark API handoffs so the watcher skips implicit tail trimming."""
     path = Path(filename)
     marker = re.search(r"\s+\[cmd.*\](?=\.[^.]+$)", path.name, re.IGNORECASE)
     if marker:
-        return f"{path.name[:marker.end() - 1]} -autocut]{path.suffix}"
-    return f"{path.stem} [cmd -autocut]{path.suffix}"
+        return f"{path.name[:marker.end() - 1]} -nocut]{path.suffix}"
+    return f"{path.stem} [cmd -nocut]{path.suffix}"
 
 
 def _fingerprint(path: Path) -> str:
