@@ -4,14 +4,27 @@ After=network.target smbd.service
 
 [Service]
 Type=simple
-User=root
+User=cutpilot
+Group=cutpilot
+RuntimeDirectory=cutpilot
+RuntimeDirectoryMode=0770
 Environment=CUTPILOT_LOGO_H=/srv/logo/logo.png
 Environment=CUTPILOT_LOGO_V=/srv/logo/logo_v.png
+Environment=CUTPILOT_LOG_FILE=/var/lib/cutpilot/watcher.log
 Environment=CUTPILOT_PROGRESS_DIR=/var/lib/cutpilot/progress
 Environment=CUTPILOT_WORKER_MODE=nvenc
 ExecStart=/usr/local/sbin/cutpilot-watcher
 Restart=always
 RestartSec=3
+NoNewPrivileges=true
+ProtectHome=true
+ProtectSystem=strict
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+ReadWritePaths=/srv/cutpilot /var/lib/cutpilot /run/cutpilot
+RestrictAddressFamilies=AF_UNIX
 
 [Install]
 WantedBy=multi-user.target

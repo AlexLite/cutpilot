@@ -9,6 +9,7 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
+import threading
 import uuid
 
 from .commands import VIDEO_EXTENSIONS, ValidatedPlan, build_worker_output_filename, validate_source_filename
@@ -16,6 +17,9 @@ from .commands import VIDEO_EXTENSIONS, ValidatedPlan, build_worker_output_filen
 
 class JobError(RuntimeError):
     pass
+
+
+_HANDOFF_LOCK = threading.Lock()
 
 
 @dataclass(frozen=True)
@@ -53,12 +57,7 @@ def _fingerprint(path: Path) -> str:
 
 
 def _copy_fast(source: Path, temporary: Path) -> None:
-    """Prefer metadata-only same-filesystem handoff, then reflink, then copy."""
-    try:
-        os.link(source, temporary)
-        return
-    except OSError:
-        pass
+    """Copy a stable snapshot; a hardlink would track later source mutations."""
     try:
         subprocess.run(
             ["cp", "--reflink=auto", "--", str(source), str(temporary)],
@@ -120,27 +119,28 @@ def handoff(directory: Path, cutpilot_directory: Path, plan: ValidatedPlan, expe
 
     destination_root = cutpilot_directory.resolve()
     destination_root.mkdir(parents=True, exist_ok=True)
-    staged_filename = plan.staged_filename
-    for number in range(1000):
-        candidate = staged_filename if number == 0 else _with_increment(plan.staged_filename, number)
-        destination = (destination_root / candidate).resolve()
-        if destination.parent != destination_root:
-            raise JobError("Unsafe destination filename")
-        result = destination_root / build_worker_output_filename(candidate)
-        if not destination.exists() and not result.exists():
-            staged_filename = candidate
-            break
-    else:
-        raise JobError("Could not find a free result filename")
-
-    temporary = destination_root / f".cutpilot.{uuid.uuid4().hex}.part"
-    try:
-        _copy_fast(source, temporary)
-        os.replace(temporary, destination)
-    except OSError as exc:
-        try:
-            temporary.unlink(missing_ok=True)
-        except OSError:
-            pass
-        raise JobError("Could not atomically hand off the source to CutPilot") from exc
-    return destination.name
+    with _HANDOFF_LOCK:
+        for number in range(1000):
+            candidate = plan.staged_filename if number == 0 else _with_increment(plan.staged_filename, number)
+            destination = (destination_root / candidate).resolve()
+            if destination.parent != destination_root:
+                raise JobError("Unsafe destination filename")
+            result = destination_root / build_worker_output_filename(candidate)
+            if destination.exists() or result.exists():
+                continue
+            temporary = destination_root / f".cutpilot.{uuid.uuid4().hex}.part"
+            try:
+                _copy_fast(source, temporary)
+                # Hard-linking the completed temp file is an atomic no-clobber
+                # publish on the local filesystem.  Unlike os.replace it can
+                # never overwrite a queue file created concurrently.
+                os.link(temporary, destination)
+                temporary.unlink()
+                return destination.name
+            except FileExistsError:
+                temporary.unlink(missing_ok=True)
+                continue
+            except OSError as exc:
+                temporary.unlink(missing_ok=True)
+                raise JobError("Could not atomically hand off the source to CutPilot") from exc
+    raise JobError("Could not find a free result filename")

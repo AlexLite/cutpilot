@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
-import tempfile
+import threading
 from typing import Any
 
 
@@ -15,6 +15,7 @@ def normalize_phrase(value: str) -> str:
 
 class LearnedDictionary:
     APPROVAL_USES = 2
+    _lock = threading.RLock()
 
     def __init__(self, path: Path):
         self.path = Path(path)
@@ -32,14 +33,18 @@ class LearnedDictionary:
         return data if isinstance(data, dict) and isinstance(data.get("entries"), dict) else {"version": 1, "entries": {}}
 
     def _write(self, data: dict[str, Any]) -> None:
-        temporary = self.path.with_name(f".{self.path.name}.{os.getpid()}.tmp")
-        temporary.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-        os.replace(temporary, self.path)
+        temporary = self.path.with_name(f".{self.path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
+        try:
+            temporary.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+            os.replace(temporary, self.path)
+        finally:
+            temporary.unlink(missing_ok=True)
 
     def lookup(self, phrase: str) -> dict[str, Any] | None:
         if not self.available:
             return None
-        entry = self._read()["entries"].get(normalize_phrase(phrase))
+        with self._lock:
+            entry = self._read()["entries"].get(normalize_phrase(phrase))
         if not isinstance(entry, dict) or entry.get("status") != "approved":
             return None
         commands = entry.get("commands")
@@ -48,17 +53,23 @@ class LearnedDictionary:
         return {"commands": commands, "summary": entry.get("summary", "Локальный план из словаря")}
 
     def record(self, phrase: str, commands: tuple[str, ...], summary: str) -> str:
-        if not self.available:
-            return "disabled"
-        key = normalize_phrase(phrase)
-        data = self._read()
-        entries = data["entries"]
-        previous = entries.get(key)
-        uses = previous.get("uses", 0) if isinstance(previous, dict) else 0
-        if not isinstance(previous, dict) or previous.get("commands") != list(commands):
-            uses = 0
-        uses += 1
-        status = "approved" if uses >= self.APPROVAL_USES else "pending"
-        entries[key] = {"phrase": phrase.strip(), "commands": list(commands), "summary": summary, "uses": uses, "status": status}
-        self._write(data)
-        return status
+        with self._lock:
+            if not self.available:
+                return "disabled"
+            key = normalize_phrase(phrase)
+            if not key:
+                return "ignored"
+            data = self._read()
+            entries = data["entries"]
+            previous = entries.get(key)
+            uses = previous.get("uses", 0) if isinstance(previous, dict) else 0
+            if not isinstance(previous, dict) or previous.get("commands") != list(commands):
+                uses = 0
+            uses += 1
+            status = "approved" if uses >= self.APPROVAL_USES else "pending"
+            entries[key] = {"phrase": phrase.strip(), "commands": list(commands), "summary": summary, "uses": uses, "status": status}
+            try:
+                self._write(data)
+            except OSError:
+                return "disabled"
+            return status

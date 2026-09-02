@@ -7,11 +7,13 @@ import json
 from pathlib import Path
 import sqlite3
 import time
+import threading
 from .commands import ValidatedPlan
 from .jobs import SourceFile
 
 
 class PlanStore:
+    _lock = threading.RLock()
     def __init__(self, path: Path):
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -31,6 +33,9 @@ class PlanStore:
                     expires_at REAL NOT NULL
                 )"""
             )
+            columns = {row[1] for row in db.execute("PRAGMA table_info(plans)")}
+            if "task" not in columns:
+                db.execute("ALTER TABLE plans ADD COLUMN task TEXT NOT NULL DEFAULT ''")
             db.execute(
                 """CREATE TABLE IF NOT EXISTS jobs (
                     id TEXT PRIMARY KEY,
@@ -42,21 +47,25 @@ class PlanStore:
                     updated_at REAL NOT NULL
                 )"""
             )
+            db.execute("CREATE INDEX IF NOT EXISTS idx_jobs_updated_at ON jobs(updated_at DESC)")
 
     def _connect(self) -> sqlite3.Connection:
         db = sqlite3.connect(self.path, timeout=10)
         db.row_factory = sqlite3.Row
+        db.execute("PRAGMA busy_timeout=10000")
+        db.execute("PRAGMA journal_mode=WAL")
         return db
 
     def save(self, plan_id: str, plan: ValidatedPlan, source: SourceFile, ttl_seconds: int) -> None:
         now = time.time()
         with closing(self._connect()) as db, db:
+            db.execute("DELETE FROM plans WHERE expires_at <= ?", (now,))
             db.execute(
                 """INSERT INTO plans
                    (id, source, source_size, source_modified_ns, source_changed_ns,
                     source_fingerprint, commands_json, summary, staged_filename,
-                    created_at, expires_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                   created_at, expires_at, task)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     plan_id,
                     source.name,
@@ -69,14 +78,17 @@ class PlanStore:
                     plan.staged_filename,
                     now,
                     now + ttl_seconds,
+                    plan.task,
                 ),
             )
 
     def take(self, plan_id: str) -> tuple[ValidatedPlan, SourceFile] | None:
         now = time.time()
-        with closing(self._connect()) as db, db:
-            row = db.execute("SELECT * FROM plans WHERE id = ? AND expires_at > ?", (plan_id, now)).fetchone()
-            db.execute("DELETE FROM plans WHERE id = ?", (plan_id,))
+        with self._lock, closing(self._connect()) as db, db:
+            row = db.execute(
+                "DELETE FROM plans WHERE id = ? AND expires_at > ? RETURNING *",
+                (plan_id, now),
+            ).fetchone()
         if row is None:
             return None
         plan = ValidatedPlan(
@@ -84,6 +96,7 @@ class PlanStore:
             commands=tuple(json.loads(row["commands_json"])),
             summary=row["summary"],
             staged_filename=row["staged_filename"],
+            task=row["task"],
         )
         source = SourceFile(
             name=row["source"],

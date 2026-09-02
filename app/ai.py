@@ -66,7 +66,7 @@ class OpenRouterAdapter:
             },
             method="POST",
         )
-        if os.environ.get("CUTPILOT_AI_LOG_PAYLOAD", "1").lower() not in {"0", "false", "no"}:
+        if os.environ.get("CUTPILOT_AI_LOG_PAYLOAD", "0").lower() not in {"0", "false", "no"}:
             logger.info("AI request: model=%s endpoint=%s payload=%s", self.model, self.endpoint, payload.decode("utf-8"))
         try:
             with urlopen(request, timeout=45) as response:

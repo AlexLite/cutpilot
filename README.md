@@ -51,7 +51,7 @@ docker compose up --build
 
 Put configuration only in the untracked `.env`. Compose mounts `./data/cutpilot` to `/srv/cutpilot` and publishes the service on `CUTPILOT_BIND_ADDRESS:8787` (localhost by default). The container has outbound access to the configured OpenRouter endpoint. For LAN access, set the bind address to the intended LAN interface and block WAN inbound access in the router/firewall; that network policy is deliberately outside this repository. The container contains the CutPilot API only, while the watcher remains a separate service and must see the same host directory for a real hand-off.
 
-The API is deliberately small: `GET /api/files`, `POST /api/plan`, and `POST /api/jobs`. A plan is held in server memory for up to 30 minutes and can be used once only after `confirmed: true`. No endpoint accepts shell, FFmpeg, arbitrary paths, or video uploads.
+The API is deliberately small: `GET /api/files`, `POST /api/upload`, `POST /api/plan`, and `POST /api/jobs`. Plans are stored in SQLite for up to 30 minutes and can be consumed once only after `confirmed: true`. Uploads accept only direct-child video filenames, are size-limited, written to a unique temporary file, fsynced, and published without overwriting an existing file. No endpoint accepts shell, FFmpeg commands, or arbitrary paths.
 
 ## Security
 

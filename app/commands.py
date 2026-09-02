@@ -23,6 +23,7 @@ class ValidatedPlan:
     commands: tuple[str, ...]
     summary: str
     staged_filename: str
+    task: str = ""
 
 
 def _time_to_seconds(value: str) -> int:
