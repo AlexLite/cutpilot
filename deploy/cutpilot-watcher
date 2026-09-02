@@ -13,6 +13,7 @@ STABLE_DIR=$RUN_DIR/stable
 LOCK_DIR=$RUN_DIR/locks
 PROGRESS_DIR=${CUTPILOT_PROGRESS_DIR:-$WATCH_DIR/.cutpilot-progress}
 PROGRESS_RETENTION_DAYS=${CUTPILOT_PROGRESS_RETENTION_DAYS:-7}
+JOB_MANIFEST_DIR=${CUTPILOT_JOB_MANIFEST_DIR:-/var/lib/cutpilot/jobs}
 STABLE_DELAY=${CUTPILOT_STABLE_DELAY:-10}
 WORKER_MODE=${CUTPILOT_WORKER_MODE:-nvenc}
 AUTO_TAIL_CUT=${CUTPILOT_AUTO_TAIL_CUT:-1}
@@ -365,14 +366,20 @@ run_ffmpeg(){
 }
 
 process_file(){
-  local input=$1 mode=$2 name ext base out_ext output tmp lock
+  local input=$1 mode=$2 name ext base out_ext output tmp lock manifest_commands
   name=$(basename "$input"); ext=${name##*.}; base=${name%.*}
   processable_file "$input" || return 0
   lock="$LOCK_DIR/$name.lock"; mkdir "$lock" 2>/dev/null || return 0
   trap 'rmdir "$lock" 2>/dev/null || true' RETURN
   PROGRESS_FILE=$(progress_file "$input")
   write_progress "$PROGRESS_FILE" processing "$name"
-  parse_commands "$base" || { write_error "$input" "$CMD_ERROR"; write_progress "$PROGRESS_FILE" failed "$CMD_ERROR"; return 0; }
+  manifest_commands=$(python3 /opt/cutpilot/app/manifest.py "$JOB_MANIFEST_DIR" "$name" 2>/dev/null || true)
+  if [[ -n "$manifest_commands" ]]; then
+    parse_commands "$base [cmd $manifest_commands]"
+  else
+    parse_commands "$base"
+  fi
+  [[ $? -eq 0 ]] || { write_error "$input" "$CMD_ERROR"; write_progress "$PROGRESS_FILE" failed "$CMD_ERROR"; return 0; }
   probe_video "$input" || { write_error "$input" "Cannot read video parameters"; write_progress "$PROGRESS_FILE" failed "Cannot read video parameters"; return 0; }
   write_progress "$PROGRESS_FILE" processing "$name"
   validate_audio "$input" || { write_error "$input" "Input audio is invalid or the file is still being copied"; write_progress "$PROGRESS_FILE" failed "Input audio is invalid or the file is still being copied"; return 0; }

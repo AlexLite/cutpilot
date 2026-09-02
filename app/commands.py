@@ -222,6 +222,19 @@ def build_staged_filename(source_filename: str, commands: tuple[str, ...]) -> st
     return result
 
 
+def build_queue_filename(source_filename: str, commands: tuple[str, ...]) -> str:
+    """Clean queue name used by structured jobs; commands live in a manifest."""
+    source = Path(source_filename)
+    extension = source.suffix.lower().lstrip(".")
+    if "-mp4" in commands:
+        extension = "mp4"
+    elif "-mov" in commands:
+        extension = "mov"
+    elif "-hevc" in commands:
+        extension = "mp4"
+    return f"{source.stem}.{extension}"
+
+
 def build_worker_output_filename(staged_filename: str) -> str:
     """Build the final name that the CutPilot watcher will create."""
 

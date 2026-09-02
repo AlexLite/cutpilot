@@ -20,9 +20,10 @@ from typing import Any
 from urllib.parse import unquote
 
 from .ai import AIProviderError, OpenRouterAdapter
-from .commands import CommandValidationError, ValidatedPlan, build_worker_output_filename, validate_edit_duration, validate_plan, validate_source_filename
-from .jobs import JobError, _with_increment, handoff, list_sources, source_metadata, with_no_auto_tail
+from .commands import CommandValidationError, ValidatedPlan, build_queue_filename, validate_edit_duration, validate_plan, validate_source_filename
+from .jobs import JobError, _with_increment, handoff, list_sources, source_metadata
 from .learned import LearnedDictionary
+from .manifest import write_manifest
 from .media import probe_media
 from .rules import simple_plan
 from .storage import PlanStore
@@ -108,6 +109,7 @@ class CutPilotService:
         self.store = PlanStore(db_path)
         dictionary_path = Path(os.environ.get("CUTPILOT_DICTIONARY_PATH", "/var/lib/cutpilot/learned_dictionary.json"))
         self.learned = LearnedDictionary(dictionary_path)
+        self.manifest_directory = Path(os.environ.get("CUTPILOT_JOB_MANIFEST_DIR", "/var/lib/cutpilot/jobs"))
 
     def files(self) -> list[dict[str, Any]]:
         return [
@@ -294,21 +296,28 @@ class CutPilotService:
             self.cutpilot_directory.mkdir(parents=True, exist_ok=True)
             reserved = False
             for number in range(1000):
-                candidate = plan.staged_filename if number == 0 else _with_increment(plan.staged_filename, number)
-                result = self.cutpilot_directory / build_worker_output_filename(candidate)
+                candidate = build_queue_filename(plan.source_filename, plan.commands)
+                if number:
+                    candidate = _with_increment(candidate, number)
+                suffix = "_nologo" if any(command in {"-nl", "-nologo"} for command in plan.commands) else "_logo"
+                result = self.cutpilot_directory / f"{Path(candidate).stem}{suffix}{Path(candidate).suffix}"
                 if (self.cutpilot_directory / candidate).exists() or result.exists():
                     continue
-                candidate_plan = replace(plan, staged_filename=with_no_auto_tail(candidate))
+                candidate_plan = replace(plan, staged_filename=candidate)
                 if self.store.create_job(plan_id, candidate_plan):
                     plan = candidate_plan
                     reserved = True
                     break
             if not reserved:
                 raise JobError("Could not reserve a free result filename")
+            manifest = None
             try:
+                manifest = write_manifest(self.manifest_directory, plan_id, plan.staged_filename, plan.commands + ("-nocut",))
                 name = handoff(self.ai_cut_directory, self.cutpilot_directory, plan, selected, allow_increment=False)
             except (JobError, OSError) as exc:
                 self.store.update_job(plan_id, "failed", str(exc))
+                if manifest is not None:
+                    manifest.unlink(missing_ok=True)
                 logger.exception("job.handoff_failed plan_id=%s source=%r", plan_id, plan.source_filename)
                 raise
             self.store.update_job(plan_id, "queued", name)
