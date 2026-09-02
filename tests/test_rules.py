@@ -21,6 +21,10 @@ class RulePlanTests(unittest.TestCase):
         plan = simple_plan("вырежи первые 15 секунд и в конце 10 секунд, сожми до 100 МБ", 181.04)
         self.assertEqual(plan["commands"], ["-crp-00.00-00.15+02.51-03.01", "-100mb"])
 
+    def test_edge_cut_understands_cut_at_start_wording(self):
+        plan = simple_plan("Обрезать вначале 10 секунд и 19 секунд в конце, сжать видео до 100 Mb", 181.04)
+        self.assertEqual(plan["commands"], ["-crp-00.00-00.10+02.42-03.01", "-100mb"])
+
 
 if __name__ == "__main__":
     unittest.main()

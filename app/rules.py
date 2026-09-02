@@ -9,7 +9,8 @@ from typing import Any
 _TIME = r"\d{1,2}(?:\.\d{2}){1,2}"
 _RANGE = rf"({_TIME})\s*[-–]\s*({_TIME})"
 _NOISE = re.compile(r"\b(?:сделай|сделать|обработай|обработать|сожми|сжать|видео|файл|формат|разрешение|размер|до|примерно|и|в|на|для|мне|пожалуйста|без|наложи|наложить|склей|склеить|соедини|соединить|объедини|объединить|оставь|оставить|логотип\w*|лого|cut)\b", re.I)
-_EDGE_CUT = re.compile(r"(?:вырежи|вырезать|удали|удалить|убери|убрать|cut).*?перв\w*\s+(\d+)\s*(секунд\w*|минут\w*).*?(?:в\s+конц\w*|последн\w*)\s+(\d+)\s*(секунд\w*|минут\w*)", re.I)
+_EDGE_CUT = re.compile(r"(?:вырежи|вырезать|обрезать|удали|удалить|убери|убрать|cut).*?(?:перв\w*|вначале|в\s+начале?)\s+(\d+)\s*(секунд\w*|минут\w*).*?(?:в\s*конц\w*|последн\w*)\s+(\d+)\s*(секунд\w*|минут\w*)", re.I)
+_EDGE_CUT_ALT = re.compile(r"(?:вырежи|вырезать|обрезать|удали|удалить|убери|убрать|cut).*?вначале\s+(\d+)\s+(секунд\w*).*?(\d+)\s+(секунд\w*)\s+в\s+конце", re.I)
 
 
 def simple_plan(task: str, duration_seconds: float | str | None = None) -> dict[str, Any] | None:
@@ -19,6 +20,10 @@ def simple_plan(task: str, duration_seconds: float | str | None = None) -> dict[
     consumed = text
 
     edge_cut = _EDGE_CUT.search(text)
+    if edge_cut is None:
+        alternate = _EDGE_CUT_ALT.search(text)
+        if alternate is not None:
+            edge_cut = alternate
     if edge_cut:
         if duration_seconds is None:
             return None
