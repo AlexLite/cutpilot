@@ -9,6 +9,7 @@ User=cutpilot
 Group=cutpilot
 WorkingDirectory=/opt/cutpilot
 EnvironmentFile=/etc/cutpilot/cutpilot.env
+Environment=CUTPILOT_DB_PATH=/var/lib/cutpilot/cutpilot.db
 ExecStart=/usr/bin/python3 -m app.server
 Restart=on-failure
 RestartSec=5
@@ -18,7 +19,7 @@ PrivateTmp=true
 PrivateDevices=true
 ProtectHome=true
 ProtectSystem=strict
-ReadWritePaths=/srv/cutpilot /srv/cutpilot/AI_Cut
+ReadWritePaths=/srv/cutpilot /srv/cutpilot/AI_Cut /var/lib/cutpilot
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
 
 [Install]
