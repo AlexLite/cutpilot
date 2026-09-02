@@ -264,10 +264,6 @@ build_filter(){
     source='[editv]'
   fi
   if (( NO_LOGO )); then chain+="${source}null"
-  elif [[ "$mode" == cpu ]]; then
-    [[ "$codec" == hevc ]] && common+=(-c:v libx265 -preset fast) || common+=(-c:v libx264 -preset fast)
-    if (( bitrate > 0 )); then common+=(-b:v "$bitrate"); else common+=(-crf 23); fi
-    run_ffmpeg "${common[@]}" "$output"
   else
     if (( SRC_HEIGHT > SRC_WIDTH )); then ACTIVE_LOGO=$LOGO_V; else ACTIVE_LOGO=$LOGO_H; fi
     [[ -f "$ACTIVE_LOGO" ]] || return 1
