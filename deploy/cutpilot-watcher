@@ -32,6 +32,11 @@ publish_output(){
   mv -n -- "$temporary" "$output" || return 1
   [[ ! -e "$temporary" && -f "$output" ]]
 }
+remove_manifest(){
+  local filename=$1 key
+  key=$(printf '%s' "$filename" | sha256sum | awk '{print $1}')
+  rm -f "$JOB_MANIFEST_DIR/$key.json"
+}
 valid_video(){ local ext=${1##*.}; case "${ext,,}" in mp4|mkv|mov|avi|m4v|webm|ts|m2ts|mts) return 0;; *) return 1;; esac; }
 processable_file(){
   local name base
@@ -197,7 +202,7 @@ remux(){
   if ffmpeg -nostdin -hide_banner -loglevel error -xerror -y -i "$input" \
       -map 0 -c copy -map_metadata 0 -map_chapters 0 "$temporary" \
       && validate_output "$temporary"; then
-    publish_output "$temporary" "$output" && rm -f "$input" "${input%.*}.error.txt" "$(state_file "$input")" && write_progress "$PROGRESS_FILE" completed "$(basename "$output")"
+    publish_output "$temporary" "$output" && rm -f "$input" "${input%.*}.error.txt" "$(state_file "$input")" && remove_manifest "$(basename "$input")" && write_progress "$PROGRESS_FILE" completed "$(basename "$output")"
     log "Created: $(basename "$output"); removed original: $(basename "$input")"
     return 0
   fi
@@ -415,7 +420,7 @@ process_file(){
     write_progress "$PROGRESS_FILE" failed "Output already exists; source retained"
     return 1
   fi
-  rm -f "$input" "${input%.*}.error.txt" "$(state_file "$input")" && write_progress "$PROGRESS_FILE" completed "$(basename "$output")" && log "Created: $(basename "$output"); removed original: $name"
+  rm -f "$input" "${input%.*}.error.txt" "$(state_file "$input")" && remove_manifest "$name" && write_progress "$PROGRESS_FILE" completed "$(basename "$output")" && log "Created: $(basename "$output"); removed original: $name"
 }
 
 stable_enough(){
