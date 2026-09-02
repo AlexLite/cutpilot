@@ -21,7 +21,7 @@ from urllib.parse import unquote
 
 from .ai import AIProviderError, OpenRouterAdapter
 from .commands import CommandValidationError, ValidatedPlan, build_worker_output_filename, validate_edit_duration, validate_plan, validate_source_filename
-from .jobs import JobError, _with_increment, handoff, list_sources, source_metadata
+from .jobs import JobError, _with_increment, handoff, list_sources, source_metadata, with_auto_tail
 from .learned import LearnedDictionary
 from .media import probe_media
 from .rules import simple_plan
@@ -298,7 +298,7 @@ class CutPilotService:
                 result = self.cutpilot_directory / build_worker_output_filename(candidate)
                 if (self.cutpilot_directory / candidate).exists() or result.exists():
                     continue
-                candidate_plan = replace(plan, staged_filename=candidate)
+                candidate_plan = replace(plan, staged_filename=with_auto_tail(candidate))
                 if self.store.create_job(plan_id, candidate_plan):
                     plan = candidate_plan
                     reserved = True

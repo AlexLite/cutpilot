@@ -137,6 +137,7 @@ parse_commands(){
     elif [[ "$compact" == -nl* ]]; then NO_LOGO=1; compact=${compact:3}
     elif [[ "$compact" == -nocut* ]]; then NO_CUT=1; compact=${compact:6}
     elif [[ "$compact" == -nc* ]]; then NO_CUT=1; compact=${compact:3}
+    elif [[ "$compact" == -autocut* ]]; then NO_CUT=0; compact=${compact:7}
     elif [[ "$compact" == -hevc* ]]; then VIDEO_CODEC=hevc; compact=${compact:5}
     elif [[ "$compact" == -mp4* ]]; then
       [[ -z "$OUT_CONTAINER" || "$OUT_CONTAINER" == mp4 ]] || { CMD_ERROR="Only one output container is allowed"; return 1; }

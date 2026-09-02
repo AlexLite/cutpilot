@@ -42,6 +42,15 @@ def _with_increment(filename: str, number: int) -> str:
     return f"{stem}{path.suffix}"
 
 
+def with_auto_tail(filename: str) -> str:
+    """Mark API handoffs so the watcher can distinguish them from direct drops."""
+    path = Path(filename)
+    marker = re.search(r"\s+\[cmd.*\](?=\.[^.]+$)", path.name, re.IGNORECASE)
+    if marker:
+        return f"{path.name[:marker.end() - 1]} -autocut]{path.suffix}"
+    return f"{path.stem} [cmd -autocut]{path.suffix}"
+
+
 def _fingerprint(path: Path) -> str:
     """Hash a small stable sample instead of reading the whole video."""
     digest = hashlib.blake2b(digest_size=16)
