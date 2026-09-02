@@ -12,6 +12,7 @@ import re
 import secrets
 import shutil
 import subprocess
+import threading
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
@@ -26,6 +27,7 @@ from .rules import simple_plan
 from .storage import PlanStore
 
 logger = logging.getLogger("cutpilot.server")
+_CONFIRM_LOCK = threading.Lock()
 
 
 def _correct_logo_intent(raw: Any, task: str) -> Any:
@@ -260,21 +262,25 @@ class CutPilotService:
             raise JobError("Explicit confirmation is required")
         if not isinstance(plan_id, str) or not 1 <= len(plan_id) <= 200:
             raise JobError("Invalid plan id")
-        item = self.store.take(plan_id)
-        if item is None:
-            raise JobError("Plan is missing or has already been used")
-        plan, selected = item
-        self.store.create_job(plan_id, plan)
-        try:
-            name = handoff(self.ai_cut_directory, self.cutpilot_directory, plan, selected)
-        except (JobError, OSError) as exc:
-            self.store.update_job(plan_id, "failed", str(exc))
-            logger.exception("job.handoff_failed plan_id=%s source=%r", plan_id, plan.source_filename)
-            raise
-        self.store.update_job(plan_id, "queued", name)
-        if isinstance(self.ai, OpenRouterAdapter):
-            status = self.learned.record(plan.task, plan.commands, plan.summary)
-            logger.info("dictionary.record task=%r commands=%r status=%s", plan.task, plan.commands, status)
+        # The HTTP server is threaded. Serialize the consume-and-handoff
+        # critical section so two confirmations cannot select the same free
+        # queue/result name at the same time.
+        with _CONFIRM_LOCK:
+            item = self.store.take(plan_id)
+            if item is None:
+                raise JobError("Plan is missing or has already been used")
+            plan, selected = item
+            self.store.create_job(plan_id, plan)
+            try:
+                name = handoff(self.ai_cut_directory, self.cutpilot_directory, plan, selected)
+            except (JobError, OSError) as exc:
+                self.store.update_job(plan_id, "failed", str(exc))
+                logger.exception("job.handoff_failed plan_id=%s source=%r", plan_id, plan.source_filename)
+                raise
+            self.store.update_job(plan_id, "queued", name)
+            if isinstance(self.ai, OpenRouterAdapter):
+                status = self.learned.record(plan.task, plan.commands, plan.summary)
+                logger.info("dictionary.record task=%r commands=%r status=%s", plan.task, plan.commands, status)
         logger.info("job.handoff_ok plan_id=%s source=%r staged=%r", plan_id, plan.source_filename, name)
         return {"status": "queued", "filename": name}
 
