@@ -13,6 +13,7 @@ import secrets
 import shutil
 import subprocess
 import threading
+import time
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
@@ -28,6 +29,26 @@ from .storage import PlanStore
 
 logger = logging.getLogger("cutpilot.server")
 _CONFIRM_LOCK = threading.Lock()
+
+
+class _RateLimiter:
+    """Small process-local limiter for the LAN-only HTTP surface."""
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._hits: dict[tuple[str, str], list[float]] = {}
+
+    def allow(self, client: str, route: str, limit: int) -> bool:
+        now = time.monotonic()
+        key = (client, route)
+        with self._lock:
+            hits = [value for value in self._hits.get(key, []) if now - value < 60]
+            if len(hits) >= limit:
+                self._hits[key] = hits
+                return False
+            hits.append(now)
+            self._hits[key] = hits
+            return True
 
 
 def _correct_logo_intent(raw: Any, task: str) -> Any:
@@ -310,6 +331,8 @@ def _json_response(handler: BaseHTTPRequestHandler, status: int, data: dict[str,
 
 
 def make_handler(service: CutPilotService):
+    limiter = _RateLimiter()
+
     class Handler(BaseHTTPRequestHandler):
         server_version = "CutPilot/0.1"
 
@@ -370,6 +393,15 @@ def make_handler(service: CutPilotService):
         def do_POST(self) -> None:  # noqa: N802
             request_id = secrets.token_hex(8)
             logger.info("http.start request_id=%s path=%s", request_id, self.path)
+            limits = {
+                "/api/plan": int(os.environ.get("CUTPILOT_RATE_LIMIT_PLAN", "10")),
+                "/api/upload": int(os.environ.get("CUTPILOT_RATE_LIMIT_UPLOAD", "6")),
+                "/api/jobs": int(os.environ.get("CUTPILOT_RATE_LIMIT_CONFIRM", "30")),
+                "/api/jobs/cancel": int(os.environ.get("CUTPILOT_RATE_LIMIT_CANCEL", "30")),
+            }
+            if self.path in limits and not limiter.allow(self.client_address[0], self.path, max(1, limits[self.path])):
+                _json_response(self, HTTPStatus.TOO_MANY_REQUESTS, {"error": "Слишком много запросов. Повторите позже."})
+                return
             if self.path == "/api/upload":
                 try:
                     length = int(self.headers.get("Content-Length", "0"))
