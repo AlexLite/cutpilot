@@ -12,6 +12,7 @@ class ManifestTests(unittest.TestCase):
             root = Path(directory)
             path = write_manifest(root / "jobs", "job-1", "video.mp4", ("-nologo", "-nocut"))
             self.assertEqual(path.parent, root / "jobs")
+            self.assertTrue(path.name.endswith(".json"))
             self.assertEqual(commands_for_file(root / "jobs", "video.mp4"), "-nologo -nocut")
             self.assertEqual(json.loads(path.read_text(encoding="utf-8"))["queue_filename"], "video.mp4")
 

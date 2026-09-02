@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 from pathlib import Path
 from typing import Any
@@ -10,8 +11,9 @@ from typing import Any
 
 def write_manifest(directory: Path, job_id: str, queue_filename: str, commands: tuple[str, ...]) -> Path:
     directory.mkdir(parents=True, exist_ok=True)
-    target = directory / f"{job_id}.json"
-    temporary = directory / f".{job_id}.{os.getpid()}.tmp"
+    key = hashlib.sha256(queue_filename.encode("utf-8")).hexdigest()
+    target = directory / f"{key}.json"
+    temporary = directory / f".{key}.{os.getpid()}.tmp"
     payload: dict[str, Any] = {"job_id": job_id, "queue_filename": queue_filename, "commands": list(commands)}
     try:
         temporary.write_text(json.dumps(payload, ensure_ascii=False) + "\n", encoding="utf-8")
@@ -22,16 +24,14 @@ def write_manifest(directory: Path, job_id: str, queue_filename: str, commands: 
 
 
 def commands_for_file(directory: Path, filename: str) -> str:
-    for path in directory.glob("*.json"):
-        try:
-            data = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
-            continue
-        if data.get("queue_filename") != filename:
-            continue
-        commands = data.get("commands")
-        if isinstance(commands, list) and all(isinstance(item, str) for item in commands):
-            return " ".join(commands)
+    key = hashlib.sha256(filename.encode("utf-8")).hexdigest()
+    try:
+        data = json.loads((directory / f"{key}.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return ""
+    commands = data.get("commands")
+    if data.get("queue_filename") == filename and isinstance(commands, list) and all(isinstance(item, str) for item in commands):
+        return " ".join(commands)
     return ""
 
 
