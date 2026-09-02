@@ -17,6 +17,10 @@ class RulePlanTests(unittest.TestCase):
     def test_complex_request_falls_back_to_ai(self):
         self.assertIsNone(simple_plan("сделай как для телеграма, но сохрани качество"))
 
+    def test_edge_cut_uses_real_duration(self):
+        plan = simple_plan("вырежи первые 15 секунд и в конце 10 секунд, сожми до 100 МБ", 181.04)
+        self.assertEqual(plan["commands"], ["-crp-00.00-00.15+02.51-03.01", "-100mb"])
+
 
 if __name__ == "__main__":
     unittest.main()

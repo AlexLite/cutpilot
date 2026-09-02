@@ -188,7 +188,10 @@ class CutPilotService:
                 metadata.update(probe_media(self.ai_cut_directory / selected.name))
             except (OSError, StopIteration, TypeError, ValueError, subprocess.SubprocessError) as exc:
                 logger.warning("Media probe unavailable for %s: %s", selected.name, exc)
-            raw = self.ai.create_plan(selected.name, metadata, normalized_task)
+            if isinstance(self.ai, OpenRouterAdapter):
+                raw = simple_plan(normalized_task, metadata.get("duration_seconds"))
+            if raw is None:
+                raw = self.ai.create_plan(selected.name, metadata, normalized_task)
         raw = _correct_edit_intent(raw, task.strip())
         raw = _correct_logo_intent(raw, task.strip())
         try:
