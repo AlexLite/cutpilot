@@ -36,9 +36,16 @@
     .welcome-mark { width:54px; height:54px; margin:auto; border-radius:16px; font-size:1.2rem; }
     .composer { margin-top:2rem; padding:1rem; background:#2f2f2f; border:1px solid #454545; border-radius:14px; box-shadow:0 8px 25px #0002; }
     .file-tools { display:flex; gap:.6rem; margin-top:.75rem; flex-wrap:wrap; }
-    .drop-zone { flex:1; min-width:220px; padding:.75rem; color:var(--muted); border:1px dashed #626262; border-radius:9px; text-align:center; cursor:pointer; }
+    .file-tools { display:block; }
+    .upload-choice { display:flex; align-items:center; gap:.5rem; margin:.75rem 0 .5rem; color:var(--muted); font-size:.85rem; }
+    .upload-choice input { accent-color:var(--accent); }
+    .drop-zone { display:block; padding:.75rem; color:var(--muted); border:1px dashed #626262; border-radius:9px; text-align:center; cursor:pointer; }
     .drop-zone.dragover { color:var(--text); border-color:var(--accent); background:#153b32; }
     .folder-button { padding:.65rem .8rem; color:#ddd; background:#444; border:1px solid #5b5b5b; border-radius:8px; cursor:pointer; }
+    .path-link { padding:0; color:#8fc9ff; background:transparent; border:0; text-decoration:underline; cursor:pointer; font:inherit; }
+    .task-box { position:relative; }
+    .task-box textarea { padding-bottom:3.5rem; }
+    .task-box .send { position:absolute; right:.75rem; bottom:.75rem; min-width:0; padding:.55rem .9rem; }
     label { display:block; margin:0 0 .45rem; color:var(--muted); font-size:.82rem; }
     select,textarea,button { font:inherit; }
     select,textarea { width:100%; color:var(--text); background:#212121; border:1px solid #4a4a4a; border-radius:9px; padding:.75rem; outline:none; }
