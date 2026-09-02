@@ -8,8 +8,9 @@ from typing import Any
 
 _TIME = r"\d{1,2}(?:\.\d{2}){1,2}"
 _RANGE = rf"({_TIME})\s*[-–]\s*({_TIME})"
-_NOISE = re.compile(r"\b(?:сделай|сделать|обработай|обработать|сожми|сжать|видео|файл|формат|разрешение|размер|до|примерно|и|в|на|для|мне|пожалуйста|без|наложи|наложить|склей|склеить|соедини|соединить|объедини|объединить|оставь|оставить|логотип\w*|лого|cut)\b", re.I)
-_EDGE_CUT = re.compile(r"(?:вырежи|вырезать|удали|удалить|убери|убрать|cut).*?перв\w*\s+(\d+)\s*(секунд\w*|минут\w*).*?(?:в\s+конц\w*|последн\w*)\s+(\d+)\s*(секунд\w*|минут\w*)", re.I)
+_NOISE = re.compile(r"\b(?:сделай|сделать|обработай|обработать|перекодируй|перекодировать|конвертируй|конвертировать|сожми|сжать|уменьши|уменьшить|сократи|сократить|обрез\w*|видео|файл|формат|разрешение|размер|до|примерно|и|в|на|по|для|мне|пожалуйста|без|наложи|наложить|склей|склеить|соедини|соединить|объедини|объединить|оставь|оставить|таймкод\w*|мегабайт\w*|гигабайт\w*|логотип\w*|лого|с|c|cut)\b", re.I)
+_EDGE_CUT = re.compile(r"(?:вырежи|вырезать|обрезать|удали|удалить|убери|убрать|cut).*?(?:перв\w*|вначале|в\s+начале?)\s+(\d+)\s*(секунд\w*|минут\w*).*?(?:в\s*конц\w*|последн\w*)\s+(\d+)\s*(секунд\w*|минут\w*)", re.I)
+_EDGE_CUT_ALT = re.compile(r"(?:вырежи|вырезать|обрезать|удали|удалить|убери|убрать|cut).*?вначале\s+(\d+)\s+(секунд\w*).*?(\d+)\s+(секунд\w*)\s+в\s+конце", re.I)
 
 
 def simple_plan(task: str, duration_seconds: float | str | None = None) -> dict[str, Any] | None:
@@ -19,6 +20,10 @@ def simple_plan(task: str, duration_seconds: float | str | None = None) -> dict[
     consumed = text
 
     edge_cut = _EDGE_CUT.search(text)
+    if edge_cut is None:
+        alternate = _EDGE_CUT_ALT.search(text)
+        if alternate is not None:
+            edge_cut = alternate
     if edge_cut:
         if duration_seconds is None:
             return None
@@ -53,16 +58,20 @@ def simple_plan(task: str, duration_seconds: float | str | None = None) -> dict[
     for match in re.finditer(r"\b([1-5]?\d|60)\s*(?:fps|кадр(?:а|ов)?\s*/\s*с)\b", text):
         commands.append(f"-{match.group(1)}fps")
         consumed = consumed.replace(match.group(0), " ")
-    for match in re.finditer(r"\b([1-9]\d*)\s*(mb|gb|мб|гб)\b", text):
-        unit = {"мб": "mb", "гб": "gb"}.get(match.group(2), match.group(2))
+    for match in re.finditer(r"\b([1-9]\d*)\s*(mb|gb|мб|гб|мегабайт\w*|гигабайт\w*)\b", text):
+        unit = "gb" if match.group(2).startswith(("gb", "гб", "гигабайт")) else "mb"
         commands.append(f"-{match.group(1)}{unit}")
         consumed = consumed.replace(match.group(0), " ")
 
     negative_logo = bool(re.search(r"(?:без|убер(?:и|ать)|удал(?:и|ить)|remove)\s+(?:логотип\w*|лого)", text))
-    positive_logo = bool(re.search(r"(?:с|остав(?:ь|ить)|добав(?:ь|ить)|with)\s+(?:логотип\w*|лого)", text))
+    positive_logo = bool(re.search(r"(?:с|c|остав(?:ь|ить)|добав(?:ь|ить)|with)\s+(?:логотип\w*|лого|logo)", text))
+    overlay_logo = bool(re.search(r"(?:наложи|наложить|нанеси|нанести|поставь|поставить)\s+(?:логотип\w*|лого)", text))
     if negative_logo:
         commands.append("-nologo")
         consumed = re.sub(r"(?:без|убер(?:и|ать)|удал(?:и|ить)|remove)\s+(?:логотип\w*|лого)", " ", consumed)
+    elif overlay_logo:
+        commands.append("-nl")
+        consumed = re.sub(r"(?:наложи|наложить|нанеси|нанести|поставь|поставить)\s+(?:логотип\w*|лого)", " ", consumed)
     elif positive_logo:
         consumed = re.sub(r"(?:с|остав(?:ь|ить)|добав(?:ь|ить)|with)\s+(?:логотип\w*|лого)", " ", consumed)
 
@@ -74,7 +83,7 @@ def simple_plan(task: str, duration_seconds: float | str | None = None) -> dict[
             if len(ranges) > 1:
                 return None
             command = f"-crp={ranges[0].group(1)}-{ranges[0].group(2)}"
-        elif re.search(r"(?:удали|удалить|вырежи|вырезать|убери|убрать|remove|cut)", text):
+        elif re.search(r"(?:удали|удалить|вырежи|вырезать|обрезать|убери|убрать|remove|cut)", text):
             command = "-crp-" + "+".join(f"{m.group(1)}-{m.group(2)}" for m in ranges)
         else:
             return None

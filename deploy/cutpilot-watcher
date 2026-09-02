@@ -224,9 +224,18 @@ trim_encoded_tail(){
 
 target_bitrate(){
   local duration=$1 audio=128000 usable
-  (( TARGET_BYTES > 0 )) || { echo 0; return; }
-  usable=$(awk -v b="$TARGET_BYTES" -v d="$duration" -v a="$audio" 'BEGIN { v=int((b*0.965*8/d)-a); if(v<250000)v=250000; print v }')
-  echo "$usable"
+  if (( TARGET_BYTES > 0 )); then
+    usable=$(awk -v b="$TARGET_BYTES" -v d="$duration" -v a="$audio" 'BEGIN { v=int((b*0.965*8/d)-a); if(v<250000)v=250000; print v }')
+    echo "$usable"
+    return
+  fi
+  case "$TARGET_HEIGHT" in
+    1080) echo 5000000 ;;
+    720) echo 3000000 ;;
+    480) echo 1500000 ;;
+    360) echo 800000 ;;
+    *) echo 0 ;;
+  esac
 }
 
 prepare_edit(){

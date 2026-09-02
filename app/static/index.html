@@ -35,6 +35,9 @@
     .welcome p { margin:0; color:var(--muted); }
     .welcome-mark { width:54px; height:54px; margin:auto; border-radius:16px; font-size:1.2rem; }
     .composer { margin-top:2rem; padding:1rem; background:#2f2f2f; border:1px solid #454545; border-radius:14px; box-shadow:0 8px 25px #0002; }
+    .source-picker { flex:1; min-width:0; }
+    .source-line { display:flex; gap:.75rem; align-items:center; }
+    .source-line > label { flex:1; margin:0; }
     .file-tools { flex:1; min-width:260px; }
     .drop-zone { display:block; padding:.75rem; color:var(--muted); border:1px dashed #626262; border-radius:9px; text-align:center; cursor:pointer; }
     .drop-zone.dragover { color:var(--text); border-color:var(--accent); background:#153b32; }
@@ -50,6 +53,7 @@
     textarea { min-height:92px; resize:vertical; }
     .compose-row { display:flex; gap:.75rem; align-items:end; }
     .compose-row > div { flex:1; min-width:260px; }
+    .source-picker select { margin-top:.55rem; }
     .send { width:auto; min-width:116px; padding:.75rem 1rem; color:white; background:var(--accent); border:0; border-radius:9px; cursor:pointer; font-weight:600; }
     .send:hover { filter:brightness(1.1); }
     .hint { margin:.7rem 0 0; color:var(--muted); font-size:.78rem; }
@@ -67,7 +71,7 @@
     .instruction-card h3 { margin:0 0 .35rem; font-size:1rem; }
     .instruction-card p { margin:.25rem 0; color:#c8c8c8; }
     code { padding:.12rem .3rem; color:#b7e9dc; background:#151515; border-radius:4px; }
-    @media (max-width:700px) { .layout { grid-template-columns:1fr; } aside { display:block; border-right:0; border-bottom:1px solid #303030; } .side-note { margin-top:0; } .topbar { padding:0 1rem; } .tabs { padding-left:1rem; } .pane { padding:1.5rem 1rem 5rem; } .welcome { margin:2rem auto 1.5rem; } .compose-row { display:block; } .send { width:100%; margin-top:.75rem; } }
+    @media (max-width:700px) { .layout { grid-template-columns:1fr; } aside { display:block; border-right:0; border-bottom:1px solid #303030; } .side-note { margin-top:0; } .topbar { padding:0 1rem; } .tabs { padding-left:1rem; } .pane { padding:1.5rem 1rem 5rem; } .welcome { margin:2rem auto 1.5rem; } .compose-row { display:block; } .source-line { display:block; } .source-line .file-tools { margin-top:.55rem; } .send { width:100%; margin-top:.75rem; } }
   </style>
 </head>
 <body>
@@ -78,7 +82,7 @@
       <nav class="tabs" aria-label="Разделы CutPilot"><button class="tab active" data-tab="agent">AI-агент</button><button class="tab" data-tab="instructions">Инструкция</button></nav>
       <section class="pane active" id="agent">
         <div class="welcome"><span class="welcome-mark">CP</span><h2>Что сделаем с видео?</h2><p>Опишите задачу обычным языком — я подготовлю безопасный план.</p></div>
-        <div class="composer"><div class="compose-row"><div><label for="source">Исходное видео</label><select id="source"></select></div><button class="send" id="plan">Создать план</button></div><label for="task" style="margin-top:.85rem">Задача</label><textarea id="task" placeholder="Например: MP4 1080p без логотипа, удалить участок 4.15–4.36"></textarea><p class="hint">Видео не загружается AI-провайдеру. Перед постановкой в очередь план нужно подтвердить.</p></div>
+        <div class="composer"><div class="compose-row"><div><label for="source">Исходное видео</label><select id="source"></select></div><button class="send" id="plan">Создать план</button></div><label for="task" style="margin-top:.85rem">Задача</label><textarea id="task" placeholder="Например: MP4 1080p с логотипом, удалить участок 4.15–4.36"></textarea><p class="hint">Видео не загружается AI-провайдеру. Перед постановкой в очередь план нужно подтвердить.</p></div>
         <section id="review" hidden><h3>План готов</h3><pre id="details"></pre><button id="confirm">Подтвердить и поставить в очередь</button></section><p id="status"></p><section id="queue" hidden><h3>В работе</h3><div id="active-list"></div></section>
       </section>
       <section class="pane" id="instructions"><div class="welcome"><h2>Как работать с видео</h2><p>Просто выберите файл и напишите, что нужно сделать.</p></div><div class="instruction-card"><h3>1. Выберите видео</h3><p>В списке находятся файлы из папки <code>AI_Cut</code>. Выберите нужный файл.</p></div><div class="instruction-card"><h3>2. Напишите задачу обычными словами</h3><p>Например: «сделай MP4 без логотипа» или «оставь только фрагмент с 1.10 до 2.30».</p><p>Видео никуда не загружается. AI получает только имя файла, его размер и ваш текст.</p></div><div class="instruction-card"><h3>3. Проверьте план</h3><p>Программа покажет, что именно будет сделано. Если всё правильно, нажмите «Подтвердить».</p></div><div class="instruction-card"><h3>4. Дождитесь результата</h3><p>Текущая обработка появится внизу экрана в разделе «В работе». Завершённые задания будут в истории слева.</p></div><div class="instruction-card"><h3>Примеры задач</h3><p><code>Сделай MP4</code></p><p><code>Удали логотип</code></p><p><code>Добавь логотип</code></p><p><code>Оставь фрагмент с 0.15 до 0.50</code></p><p><code>Склей 0.15–0.50 и 1.25–2.13</code></p><p><code>Сделай MP4 1080p без логотипа</code></p></div><div class="instruction-card"><h3>Как писать время</h3><p><code>1.10</code> — 1 минута 10 секунд.</p><p><code>01.23.23</code> — 1 час 23 минуты 23 секунды.</p><p>Для нескольких фрагментов перечислите их через «и».</p></div></section>

@@ -22,23 +22,27 @@ class OpenRouterAdapter:
         self.model = model or os.environ.get("OPENROUTER_MODEL", "").strip()
         self.endpoint = endpoint or os.environ.get("OPENROUTER_ENDPOINT", "https://openrouter.ai/api/v1/chat/completions")
 
-    def create_plan(self, source_filename: str, metadata: dict[str, Any], task: str) -> dict[str, Any]:
+    def create_plan(self, source_filename: str, metadata: dict[str, Any], task: str, feedback: str | None = None) -> dict[str, Any]:
         if not self.api_key or not self.model:
             raise AIProviderError("AI provider is not configured")
 
         system = (
             "Return JSON only: {commands:[string],summary:string}. Allowed commands: "
-            "-mp4|-mov|-hevc|-1080p|-720p|-480p|-360p|-Nfps (1..60)|-Nmb|-Ngb (positive), "
+            "-mp4|-mov|-hevc|-1080p|-720p|-480p|-360p|-<number>fps (1..60)|-<number>mb|-<number>gb (positive), "
             "-nl|-nologo|-nc|-nocut, -crp-START-END, -crp=START-END, "
             "-crp+START-END+START-END. Use MM.SS or HH.MM.SS with two-digit seconds: "
             "the first 10 seconds is exactly -crp-00.00-00.10; never use -crp-0-10 or colons. "
-            "Logo semantics: 'с лого', 'добавь/оставь логотип' means keep the logo and never emit -nl/-nologo; "
-            "'без лого', 'убери/удали логотип' means emit -nologo. "
+            "Never return placeholders such as N, START, END, <number>, or angle brackets literally. "
+            "Size examples: 'сожми до 100 Мб' -> '-100mb'; 'сожми до 2 Гб' -> '-2gb'. "
+            "Logo semantics: 'с лого' or 'оставь логотип' means keep the existing logo and emit neither -nl nor -nologo; "
+            "'наложи/добавь логотип' means emit -nl; 'без лого' or 'убери логотип' means emit -nologo. "
+            "Edit example: 'обрежь 1.25-1.55' -> '-crp-01.25-01.55'. "
+            "If the user object contains 'e', it is the previous validation error: return a corrected plan, not an explanation. "
             "No shell, FFmpeg, paths, URLs, or other commands. Ambiguous task: commands=[] and brief summary. "
             "summary <=160 characters."
         )
         user = json.dumps(
-            {"n": source_filename, "m": metadata, "t": task},
+            {"n": source_filename, "m": metadata, "t": task, **({"e": feedback} if feedback else {})},
             ensure_ascii=False,
             separators=(",", ":"),
         )

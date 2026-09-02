@@ -60,10 +60,15 @@ function setupFileTools() {
   taskBox.append(taskInput, planButton);
   const sourceColumn = source.closest('div');
   const composeRow = sourceColumn.closest('.compose-row');
+  sourceColumn.classList.add('source-picker');
   const tools = document.createElement('div');
   tools.className = 'file-tools';
   tools.innerHTML = '<label class="drop-zone" tabindex="0">Или перетащите видео сюда или нажмите для выбора<input type="file" accept="video/*,.mkv,.ts,.m2ts,.mts" hidden></label>';
-  composeRow.insertBefore(tools, planButton);
+  const sourceLabel = sourceColumn.querySelector('label[for="source"]');
+  const sourceLine = document.createElement('div');
+  sourceLine.className = 'source-line';
+  sourceLabel.replaceWith(sourceLine);
+  sourceLine.append(sourceLabel, tools);
   const zone = tools.querySelector('.drop-zone');
   const input = tools.querySelector('input[type="file"]');
   const upload = async (file) => {
@@ -157,7 +162,7 @@ document.querySelector('#plan').onclick = async () => {
     confirmButton.style.display = 'block';
     show('Проверьте имя и команды.');
   } catch (error) {
-    show(`Ошибка: ${error.message}`);
+    show(error.message.startsWith('Не удалось безопасно') ? error.message : `Ошибка: ${error.message}`);
   }
 };
 

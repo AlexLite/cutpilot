@@ -8,9 +8,17 @@ from app.server import CutPilotService, _correct_edit_intent, _correct_logo_inte
 
 
 class LogoIntentTests(unittest.TestCase):
+    def test_logo_is_removed_by_default(self):
+        raw = {"commands": ["-crp-00.00-00.10", "-100mb"], "summary": "cut"}
+        self.assertEqual(_correct_logo_intent(raw, "обрежь начало и сожми до 100 Mb")["commands"], ["-crp-00.00-00.10", "-100mb", "-nologo"])
+
     def test_positive_logo_request_removes_no_logo_command(self):
         raw = {"commands": ["-nologo"], "summary": "remove"}
         self.assertEqual(_correct_logo_intent(raw, "просчитай с лого")["commands"], [])
+
+    def test_latin_c_logo_request_removes_no_logo_command(self):
+        raw = {"commands": ["-nl"], "summary": "overlay"}
+        self.assertEqual(_correct_logo_intent(raw, "перекодируй в mov c лого")["commands"], [])
 
     def test_negative_logo_request_is_not_changed(self):
         raw = {"commands": ["-nologo"], "summary": "remove"}

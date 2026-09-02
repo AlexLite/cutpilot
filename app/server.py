@@ -19,6 +19,7 @@ from urllib.parse import unquote
 from .ai import AIProviderError, OpenRouterAdapter
 from .commands import CommandValidationError, ValidatedPlan, validate_edit_duration, validate_plan, validate_source_filename
 from .jobs import JobError, handoff, list_sources, source_metadata
+from .learned import LearnedDictionary
 from .media import probe_media
 from .rules import simple_plan
 from .storage import PlanStore
@@ -27,15 +28,18 @@ logger = logging.getLogger("cutpilot.server")
 
 
 def _correct_logo_intent(raw: Any, task: str) -> Any:
-    """Prevent a positive Russian logo request from becoming a no-logo command."""
+    """Remove logos by default; preserve one only for an explicit positive request."""
     if not isinstance(raw, dict) or not isinstance(raw.get("commands"), list):
         return raw
     lowered = task.casefold()
-    positive = bool(re.search(r"(?:с|добавь|добавить|оставь|оставить|наложи|наложить|нанеси|поставь|keep|with)\s*(?:лого|логотип)", lowered))
+    positive = bool(re.search(r"(?:с|c|добавь|добавить|оставь|оставить|наложи|наложить|нанеси|поставь|keep|with)\s*(?:лого|логотип|logo)", lowered))
     negative = bool(re.search(r"(?:без|убери|убрать|удали|удалить|remove)\s*(?:лого|логотип)", lowered))
-    if not positive or negative:
-        return raw
-    commands = [command for command in raw["commands"] if command not in {"-nl", "-nologo"}]
+    if positive and not negative:
+        commands = [command for command in raw["commands"] if command not in {"-nl", "-nologo"}]
+    else:
+        commands = [command for command in raw["commands"] if command != "-nl"]
+        if "-nologo" not in commands:
+            commands.append("-nologo")
     if len(commands) != len(raw["commands"]):
         corrected = dict(raw)
         corrected["commands"] = commands
@@ -78,6 +82,8 @@ class CutPilotService:
         self.cutpilot_directory = Path(cutpilot_directory or os.environ.get("CUTPILOT_DIRECTORY", "/srv/cutpilot"))
         db_path = Path(os.environ.get("CUTPILOT_DB_PATH", str(self.cutpilot_directory / "cutpilot.db")))
         self.store = PlanStore(db_path)
+        dictionary_path = Path(os.environ.get("CUTPILOT_DICTIONARY_PATH", "/var/lib/cutpilot/learned_dictionary.json"))
+        self.learned = LearnedDictionary(dictionary_path)
 
     def files(self) -> list[dict[str, Any]]:
         return [
@@ -177,9 +183,15 @@ class CutPilotService:
     def create_plan(self, source: str, task: str) -> dict[str, Any]:
         if not isinstance(task, str) or not 1 <= len(task.strip()) <= 4000:
             raise CommandValidationError("Task must contain 1-4000 characters")
+        logger.info("plan.start source=%r task=%r", source, task.strip())
         selected = source_metadata(self.ai_cut_directory, source)
         normalized_task = task.strip()
-        raw = simple_plan(normalized_task) if isinstance(self.ai, OpenRouterAdapter) else None
+        raw = self.learned.lookup(normalized_task) if isinstance(self.ai, OpenRouterAdapter) else None
+        used_ai = False
+        if raw is not None:
+            logger.info("Using learned dictionary plan: task=%r plan=%r", normalized_task, raw)
+        else:
+            raw = simple_plan(normalized_task) if isinstance(self.ai, OpenRouterAdapter) else None
         if raw is not None:
             logger.info("Using local rule plan: task=%r plan=%r", normalized_task, raw)
         else:
@@ -191,25 +203,41 @@ class CutPilotService:
             if isinstance(self.ai, OpenRouterAdapter):
                 raw = simple_plan(normalized_task, metadata.get("duration_seconds"))
             if raw is None:
+                used_ai = True
                 raw = self.ai.create_plan(selected.name, metadata, normalized_task)
-        raw = _correct_edit_intent(raw, task.strip())
-        raw = _correct_logo_intent(raw, task.strip())
-        try:
-            plan = validate_plan(selected.name, raw)
-        except CommandValidationError:
-            logger.exception("AI plan validation failed: source=%s raw=%r", selected.name, raw)
-            raise
-        if any(command.startswith("-crp") for command in plan.commands):
+        max_attempts = max(1, min(10, int(os.environ.get("CUTPILOT_AI_MAX_ATTEMPTS", "10"))))
+        seen_plans: set[str] = set()
+        for attempt in range(1, max_attempts + 1):
+            corrected = _correct_edit_intent(raw, task.strip())
+            corrected = _correct_logo_intent(corrected, task.strip())
+            fingerprint = repr(corrected)
             try:
-                duration = probe_media(self.ai_cut_directory / selected.name).get("duration_seconds")
-            except (OSError, StopIteration, TypeError, ValueError, subprocess.SubprocessError) as exc:
-                raise CommandValidationError("Не удалось проверить длительность видео для таймкодов") from exc
-            validate_edit_duration(plan.commands, duration)
+                plan = validate_plan(selected.name, corrected)
+                if any(command.startswith("-crp") for command in plan.commands):
+                    duration = probe_media(self.ai_cut_directory / selected.name).get("duration_seconds")
+                    validate_edit_duration(plan.commands, duration)
+                break
+            except (CommandValidationError, OSError, StopIteration, TypeError, ValueError, subprocess.SubprocessError) as exc:
+                if not used_ai or attempt >= max_attempts or fingerprint in seen_plans:
+                    logger.exception("AI plan validation failed: source=%s attempt=%s raw=%r", selected.name, attempt, corrected)
+                    if isinstance(exc, (OSError, StopIteration, TypeError, ValueError, subprocess.SubprocessError)):
+                        raise CommandValidationError("Не удалось проверить план и длительность видео") from exc
+                    raise
+                seen_plans.add(fingerprint)
+                logger.warning("AI plan rejected; retrying: source=%s attempt=%s/%s error=%s", selected.name, attempt, max_attempts, exc)
+                raw = self.ai.create_plan(selected.name, metadata, normalized_task, feedback=str(exc))
+        else:
+            raise CommandValidationError("Не удалось подготовить план")
         plan_id = secrets.token_urlsafe(24)
+        if used_ai:
+            status = self.learned.record(normalized_task, plan.commands, plan.summary)
+            logger.info("dictionary.record task=%r commands=%r status=%s", normalized_task, plan.commands, status)
         self.store.save(plan_id, plan, selected, self.PENDING_TTL_SECONDS)
+        logger.info("plan.ready plan_id=%s source=%r commands=%r staged=%r summary=%r", plan_id, plan.source_filename, plan.commands, plan.staged_filename, plan.summary)
         return {"plan_id": plan_id, "source_filename": plan.source_filename, "staged_filename": plan.staged_filename, "commands": list(plan.commands), "summary": plan.summary}
 
     def confirm(self, plan_id: str, confirmed: bool) -> dict[str, str]:
+        logger.info("job.confirm plan_id=%r confirmed=%r", plan_id, confirmed)
         if confirmed is not True:
             raise JobError("Explicit confirmation is required")
         if not isinstance(plan_id, str) or not 1 <= len(plan_id) <= 200:
@@ -223,8 +251,10 @@ class CutPilotService:
             name = handoff(self.ai_cut_directory, self.cutpilot_directory, plan, selected)
         except (JobError, OSError) as exc:
             self.store.update_job(plan_id, "failed", str(exc))
+            logger.exception("job.handoff_failed plan_id=%s source=%r", plan_id, plan.source_filename)
             raise
         self.store.update_job(plan_id, "queued", name)
+        logger.info("job.handoff_ok plan_id=%s source=%r staged=%r", plan_id, plan.source_filename, name)
         return {"status": "queued", "filename": name}
 
 
@@ -298,15 +328,21 @@ def make_handler(service: CutPilotService):
             _json_response(self, HTTPStatus.NOT_FOUND, {"error": "Not found"})
 
         def do_POST(self) -> None:  # noqa: N802
+            request_id = secrets.token_hex(8)
+            logger.info("http.start request_id=%s path=%s", request_id, self.path)
             if self.path == "/api/upload":
                 try:
                     length = int(self.headers.get("Content-Length", "0"))
                     filename = self.headers.get("X-Filename", "")
+                    logger.info("upload.start request_id=%s filename=%r bytes=%s", request_id, filename, length)
                     result = {"filename": service.upload(filename, self.rfile, length)}
+                    logger.info("upload.ok request_id=%s result=%r", request_id, result)
                     _json_response(self, HTTPStatus.OK, result)
                 except (CommandValidationError, JobError, ValueError) as exc:
+                    logger.exception("upload.failed request_id=%s error=%s", request_id, exc)
                     _json_response(self, HTTPStatus.BAD_REQUEST, {"error": str(exc)})
                 except OSError:
+                    logger.exception("upload.failed request_id=%s local_file_error", request_id)
                     _json_response(self, HTTPStatus.INTERNAL_SERVER_ERROR, {"error": "Local file operation failed"})
                 return
             if self.path not in {"/api/plan", "/api/jobs", "/api/jobs/cancel"}:
@@ -319,6 +355,7 @@ def make_handler(service: CutPilotService):
                 payload = json.loads(self.rfile.read(length).decode("utf-8"))
                 if not isinstance(payload, dict):
                     raise ValueError("JSON object expected")
+                logger.info("http.payload request_id=%s path=%s payload=%r", request_id, self.path, payload)
                 if self.path == "/api/plan":
                     result = service.create_plan(payload.get("source"), payload.get("task"))
                 elif self.path == "/api/jobs/cancel":
@@ -326,10 +363,19 @@ def make_handler(service: CutPilotService):
                     result = {"status": "cancelling"}
                 else:
                     result = service.confirm(payload.get("plan_id"), payload.get("confirmed"))
+                logger.info("http.ok request_id=%s path=%s result=%r", request_id, self.path, result)
                 _json_response(self, HTTPStatus.OK, result)
             except (CommandValidationError, JobError, AIProviderError, ValueError) as exc:
-                _json_response(self, HTTPStatus.BAD_REQUEST, {"error": str(exc)})
+                logger.exception("http.failed request_id=%s path=%s error=%s", request_id, self.path, exc)
+                response = {"error": str(exc)}
+                if self.path == "/api/plan" and isinstance(exc, (CommandValidationError, AIProviderError)):
+                    response = {
+                        "error": "Не удалось безопасно подготовить план. Уточните действие, таймкоды или формат видео.",
+                        "code": "plan_unclear",
+                    }
+                _json_response(self, HTTPStatus.BAD_REQUEST, response)
             except OSError:
+                logger.exception("http.failed request_id=%s path=%s local_file_error", request_id, self.path)
                 _json_response(self, HTTPStatus.INTERNAL_SERVER_ERROR, {"error": "Local file operation failed"})
 
         def log_message(self, format: str, *args: object) -> None:
