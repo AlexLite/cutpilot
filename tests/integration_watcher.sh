@@ -4,11 +4,19 @@ set -euo pipefail
 ROOT=$(mktemp -d)
 WATCHER_PID=""
 cleanup() {
+  local result=$?
   if [[ -n "$WATCHER_PID" ]]; then
     kill "$WATCHER_PID" 2>/dev/null || true
     wait "$WATCHER_PID" 2>/dev/null || true
   fi
+  if (( result != 0 )); then
+    echo "--- watcher log ---" >&2
+    sed -n '1,240p' "$ROOT/watcher.log" 2>/dev/null || true
+    echo "--- temp files ---" >&2
+    find "$ROOT" -maxdepth 1 -type f -printf '%f %s bytes\n' 2>/dev/null | sort >&2 || true
+  fi
   rm -rf "$ROOT"
+  return "$result"
 }
 trap cleanup EXIT
 
