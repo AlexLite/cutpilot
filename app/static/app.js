@@ -26,6 +26,43 @@ function applySimpleCopy() {
 
 applySimpleCopy();
 
+function setupFileTools() {
+  const composer = document.querySelector('.composer');
+  const tools = document.createElement('div');
+  tools.className = 'file-tools';
+  tools.innerHTML = '<label class="drop-zone" tabindex="0">Перетащите видео сюда или нажмите для выбора<input type="file" accept="video/*,.mkv,.ts,.m2ts,.mts" hidden></label><button class="folder-button" type="button">Открыть папку</button>';
+  composer.append(tools);
+  const zone = tools.querySelector('.drop-zone');
+  const input = tools.querySelector('input');
+  const folder = tools.querySelector('.folder-button');
+  const upload = async (file) => {
+    if (!file) return;
+    show(`Загружаю: ${file.name}`);
+    try {
+      const response = await fetch('/api/upload', {method: 'POST', headers: {'X-Filename': encodeURIComponent(file.name)}, body: file});
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Не удалось загрузить файл');
+      show(`Файл добавлен: ${data.filename}`);
+      await loadFiles();
+    } catch (error) {
+      show(`Ошибка загрузки: ${error.message}`);
+    }
+  };
+  zone.addEventListener('click', () => input.click());
+  zone.addEventListener('keydown', (event) => { if (event.key === 'Enter' || event.key === ' ') input.click(); });
+  input.addEventListener('change', () => upload(input.files[0]));
+  zone.addEventListener('dragover', (event) => { event.preventDefault(); zone.classList.add('dragover'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+  zone.addEventListener('drop', (event) => { event.preventDefault(); zone.classList.remove('dragover'); upload(event.dataTransfer.files[0]); });
+  folder.addEventListener('click', async () => {
+    const path = '\\\\cutpilot.sova.lan\\cutpilot\\AI_Cut';
+    try { await navigator.clipboard.writeText(path); show(`Путь к папке скопирован: ${path}`); } catch { show(`Путь к папке: ${path}`); }
+    window.open('file://///cutpilot.sova.lan/cutpilot/AI_Cut', '_blank');
+  });
+}
+
+setupFileTools();
+
 document.querySelectorAll('.tab').forEach((button) => button.addEventListener('click', () => {
   document.querySelectorAll('.tab, .pane').forEach((element) => element.classList.remove('active'));
   button.classList.add('active');

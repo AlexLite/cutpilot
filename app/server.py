@@ -9,13 +9,15 @@ import os
 from pathlib import Path
 import re
 import secrets
+import shutil
 import subprocess
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
+from urllib.parse import unquote
 
 from .ai import AIProviderError, OpenRouterAdapter
-from .commands import CommandValidationError, ValidatedPlan, validate_plan
+from .commands import CommandValidationError, ValidatedPlan, validate_plan, validate_source_filename
 from .jobs import JobError, handoff, list_sources, source_metadata
 from .media import probe_media
 from .rules import simple_plan
@@ -64,6 +66,7 @@ def _correct_edit_intent(raw: Any, task: str) -> Any:
 
 class CutPilotService:
     PENDING_TTL_SECONDS = 30 * 60
+    MAX_UPLOAD_BYTES = 200 * 1024 * 1024 * 1024
 
     def __init__(self, ai: Any | None = None, ai_cut_directory: Path | None = None, cutpilot_directory: Path | None = None):
         self.ai = ai or OpenRouterAdapter()
@@ -77,6 +80,34 @@ class CutPilotService:
             {key: value for key, value in asdict(item).items() if key != "fingerprint"}
             for item in list_sources(self.ai_cut_directory)
         ]
+
+    def upload(self, filename: str, stream: Any, length: int) -> str:
+        filename = validate_source_filename(unquote(filename))
+        if length <= 0 or length > self.MAX_UPLOAD_BYTES:
+            raise JobError("File size is not allowed")
+        self.ai_cut_directory.mkdir(parents=True, exist_ok=True)
+        destination = self.ai_cut_directory / filename
+        if destination.exists():
+            raise JobError("A file with this name already exists in AI_Cut")
+        if shutil.disk_usage(self.ai_cut_directory).free < length:
+            raise JobError("Not enough free space for upload")
+        temporary = self.ai_cut_directory / f".{filename}.part"
+        try:
+            with temporary.open("xb") as target:
+                remaining = length
+                while remaining:
+                    chunk = stream.read(min(1024 * 1024, remaining))
+                    if not chunk:
+                        raise JobError("Upload ended before the declared file size")
+                    target.write(chunk)
+                    remaining -= len(chunk)
+                target.flush()
+                os.fsync(target.fileno())
+            os.replace(temporary, destination)
+        except OSError as exc:
+            temporary.unlink(missing_ok=True)
+            raise JobError("Could not save uploaded file") from exc
+        return filename
 
     def jobs(self) -> list[dict[str, Any]]:
         history = {item["staged_filename"]: item for item in self.store.list_jobs()}
@@ -245,6 +276,17 @@ def make_handler(service: CutPilotService):
             _json_response(self, HTTPStatus.NOT_FOUND, {"error": "Not found"})
 
         def do_POST(self) -> None:  # noqa: N802
+            if self.path == "/api/upload":
+                try:
+                    length = int(self.headers.get("Content-Length", "0"))
+                    filename = self.headers.get("X-Filename", "")
+                    result = {"filename": service.upload(filename, self.rfile, length)}
+                    _json_response(self, HTTPStatus.OK, result)
+                except (CommandValidationError, JobError, ValueError) as exc:
+                    _json_response(self, HTTPStatus.BAD_REQUEST, {"error": str(exc)})
+                except OSError:
+                    _json_response(self, HTTPStatus.INTERNAL_SERVER_ERROR, {"error": "Local file operation failed"})
+                return
             if self.path not in {"/api/plan", "/api/jobs", "/api/jobs/cancel"}:
                 _json_response(self, HTTPStatus.NOT_FOUND, {"error": "Not found"})
                 return
