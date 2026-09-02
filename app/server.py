@@ -273,6 +273,15 @@ def make_handler(service: CutPilotService):
                 self.end_headers()
                 self.wfile.write(body)
                 return
+            if self.path == "/static/cutpilot-logo.png":
+                body = (Path(__file__).parent / "static" / "cutpilot-logo.png").read_bytes()
+                self.send_response(HTTPStatus.OK)
+                self.send_header("Content-Type", "image/png")
+                self.send_header("Cache-Control", "public, max-age=3600")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
             _json_response(self, HTTPStatus.NOT_FOUND, {"error": "Not found"})
 
         def do_POST(self) -> None:  # noqa: N802

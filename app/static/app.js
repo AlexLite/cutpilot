@@ -9,6 +9,8 @@ let planId = null;
 const show = (message) => { status.textContent = message; };
 
 function applySimpleCopy() {
+  document.querySelector('.brand-mark').innerHTML = '<img src="/static/cutpilot-logo.png" alt="CutPilot">';
+  document.querySelector('.brand-mark').style.background = 'transparent';
   document.querySelector('.side-title').textContent = 'Локальный AI видеоредактор';
   document.querySelector('.side-note')?.remove();
   document.querySelector('.topbar h1').textContent = 'Напиши что надо, сделаю сам';
