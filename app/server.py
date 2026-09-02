@@ -79,9 +79,10 @@ class CutPilotService:
         ]
 
     def jobs(self) -> list[dict[str, Any]]:
+        history = {item["staged_filename"]: item for item in self.store.list_jobs()}
         progress_directory = self.cutpilot_directory / ".cutpilot-progress"
         if not progress_directory.is_dir():
-            return []
+            return list(history.values())
         result = []
         for path in progress_directory.glob("*.progress"):
             try:
@@ -99,25 +100,33 @@ class CutPilotService:
                 name = path.name.rsplit(".", 2)[0]
                 job_id = path.name.rsplit(".", 2)[1]
                 status = values.get("status", "processing")
+                message = values.get("message", "")
+                self.store.update_job_by_staged(name, status, message)
                 progress = ""
                 try:
                     duration = float(values.get("duration", "0") or 0)
                     out_time = float(values.get("out_time_ms", "0") or 0)
-                except ValueError:
+                except (TypeError, ValueError):
                     duration = out_time = 0
+                try:
+                    updated_at = int(values.get("updated_at", "0") or 0)
+                except (TypeError, ValueError):
+                    updated_at = 0
                 if duration > 0 and out_time >= 0:
                     progress = str(min(100, max(0, round(out_time / 1_000_000 / duration * 100))))
                 result.append({
                     "id": job_id,
                     "source": name,
                     "status": status,
-                    "message": values.get("message", ""),
-                    "updated_at": int(values.get("updated_at", "0") or 0),
+                    "message": message,
+                    "updated_at": updated_at,
                     "progress": progress,
                     "out_time_ms": values.get("out_time_ms", ""),
                 })
+                history.pop(name, None)
             except OSError:
                 continue
+        result.extend(history.values())
         return sorted(result, key=lambda item: item["updated_at"], reverse=True)
 
     def cancel_job(self, job_id: str) -> None:
@@ -165,7 +174,13 @@ class CutPilotService:
         if item is None:
             raise JobError("Plan is missing or has already been used")
         plan, selected = item
-        name = handoff(self.ai_cut_directory, self.cutpilot_directory, plan, selected)
+        self.store.create_job(plan_id, plan)
+        try:
+            name = handoff(self.ai_cut_directory, self.cutpilot_directory, plan, selected)
+        except (JobError, OSError) as exc:
+            self.store.update_job(plan_id, "failed", str(exc))
+            raise
+        self.store.update_job(plan_id, "queued", name)
         return {"status": "queued", "filename": name}
 
 

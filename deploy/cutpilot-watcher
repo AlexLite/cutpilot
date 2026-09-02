@@ -11,6 +11,7 @@ RUN_DIR=/run/cutpilot
 STABLE_DIR=$RUN_DIR/stable
 LOCK_DIR=$RUN_DIR/locks
 PROGRESS_DIR=$WATCH_DIR/.cutpilot-progress
+PROGRESS_RETENTION_DAYS=${CUTPILOT_PROGRESS_RETENTION_DAYS:-7}
 STABLE_DELAY=${CUTPILOT_STABLE_DELAY:-10}
 WORKER_MODE=${CUTPILOT_WORKER_MODE:-nvenc}
 
@@ -40,6 +41,9 @@ write_progress(){
     printf 'updated_at=%s\n' "$(date +%s)"
     [[ "${SRC_DURATION:-}" =~ ^[0-9.]+$ ]] && printf 'duration=%s\n' "$SRC_DURATION"
   } > "$temporary" && mv -f "$temporary" "$file"
+}
+cleanup_progress(){
+  find "$PROGRESS_DIR" -maxdepth 1 -type f \( -name '*.progress' -o -name '*.progress.ffmpeg' -o -name '*.progress.cancel' \) -mtime "+$PROGRESS_RETENTION_DAYS" -delete 2>/dev/null || true
 }
 
   probe_video(){
@@ -392,6 +396,7 @@ stable_enough(){
 worker(){
   local mode=$1 f
   while :; do
+    cleanup_progress
     while IFS= read -r -d '' f; do processable_file "$f" && stable_enough "$f" && process_file "$f" "$mode" || true; done < <(find "$WATCH_DIR" -maxdepth 1 -type f -print0)
     sleep 3
   done
