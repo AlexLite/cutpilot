@@ -17,7 +17,7 @@ from typing import Any
 from urllib.parse import unquote
 
 from .ai import AIProviderError, OpenRouterAdapter
-from .commands import CommandValidationError, ValidatedPlan, validate_plan, validate_source_filename
+from .commands import CommandValidationError, ValidatedPlan, validate_edit_duration, validate_plan, validate_source_filename
 from .jobs import JobError, handoff, list_sources, source_metadata
 from .media import probe_media
 from .rules import simple_plan
@@ -188,7 +188,10 @@ class CutPilotService:
                 metadata.update(probe_media(self.ai_cut_directory / selected.name))
             except (OSError, StopIteration, TypeError, ValueError, subprocess.SubprocessError) as exc:
                 logger.warning("Media probe unavailable for %s: %s", selected.name, exc)
-            raw = self.ai.create_plan(selected.name, metadata, normalized_task)
+            if isinstance(self.ai, OpenRouterAdapter):
+                raw = simple_plan(normalized_task, metadata.get("duration_seconds"))
+            if raw is None:
+                raw = self.ai.create_plan(selected.name, metadata, normalized_task)
         raw = _correct_edit_intent(raw, task.strip())
         raw = _correct_logo_intent(raw, task.strip())
         try:
@@ -196,6 +199,12 @@ class CutPilotService:
         except CommandValidationError:
             logger.exception("AI plan validation failed: source=%s raw=%r", selected.name, raw)
             raise
+        if any(command.startswith("-crp") for command in plan.commands):
+            try:
+                duration = probe_media(self.ai_cut_directory / selected.name).get("duration_seconds")
+            except (OSError, StopIteration, TypeError, ValueError, subprocess.SubprocessError) as exc:
+                raise CommandValidationError("Не удалось проверить длительность видео для таймкодов") from exc
+            validate_edit_duration(plan.commands, duration)
         plan_id = secrets.token_urlsafe(24)
         self.store.save(plan_id, plan, selected, self.PENDING_TTL_SECONDS)
         return {"plan_id": plan_id, "source_filename": plan.source_filename, "staged_filename": plan.staged_filename, "commands": list(plan.commands), "summary": plan.summary}

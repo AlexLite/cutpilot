@@ -73,7 +73,7 @@ def _validate_edit(token: str) -> None:
 
 
 def _normalize_edit_token(token: object) -> object:
-    """Accept the common AI shorthand ``-crp-0-10`` as seconds."""
+    """Normalize AI edit timestamps, including minute values above 99."""
     if not isinstance(token, str):
         return token
     prefix = next((value for value in ("-crp-", "-crp=", "-crp+") if token.startswith(value)), None)
@@ -83,13 +83,32 @@ def _normalize_edit_token(token: object) -> object:
     normalized: list[str] = []
     for item in ranges:
         match = re.fullmatch(r"([0-9]+)-([0-9]+)", item)
-        if not match:
-            return token
-        start, end = (int(value) for value in match.groups())
         def timestamp(value: int) -> str:
             hours, remainder = divmod(value, 3600)
             minutes, seconds = divmod(remainder, 60)
             return f"{hours:02d}.{minutes:02d}.{seconds:02d}" if hours else f"{minutes:02d}.{seconds:02d}"
+        if match:
+            start, end = (int(value) for value in match.groups())
+            normalized.append(f"{timestamp(start)}-{timestamp(end)}")
+            continue
+        formatted = re.fullmatch(r"([0-9]+(?:\.[0-9]{1,2}){1,2})-([0-9]+(?:\.[0-9]{1,2}){1,2})", item)
+        if not formatted:
+            return token
+        def parse(value: str) -> int:
+            parts = [int(part) for part in value.split(".")]
+            if len(parts) == 2:
+                minutes, seconds = parts
+                if seconds > 59:
+                    raise ValueError
+                return minutes * 60 + seconds
+            hours, minutes, seconds = parts
+            if minutes > 59 or seconds > 59:
+                raise ValueError
+            return hours * 3600 + minutes * 60 + seconds
+        try:
+            start, end = parse(formatted.group(1)), parse(formatted.group(2))
+        except ValueError:
+            return token
         normalized.append(f"{timestamp(start)}-{timestamp(end)}")
     return prefix + "+".join(normalized)
 
@@ -139,6 +158,34 @@ def validate_commands(commands: object) -> tuple[str, ...]:
             raise CommandValidationError(f"Unknown CutPilot command: {command}")
 
     return tuple(commands)
+
+
+def validate_edit_duration(commands: tuple[str, ...], duration_seconds: float | str) -> None:
+    """Reject edit ranges that extend beyond the actual media duration."""
+    try:
+        duration = float(duration_seconds)
+    except (TypeError, ValueError) as exc:
+        raise CommandValidationError("Video duration is unavailable") from exc
+    if duration <= 0:
+        raise CommandValidationError("Video duration is invalid")
+    for command in commands:
+        if not command.startswith("-crp"):
+            continue
+        rest = command[5:]
+        while rest:
+            match = _EDIT.match(rest)
+            if match is None:
+                return
+            end = _time_to_seconds(match.group("end"))
+            if end > duration:
+                raise CommandValidationError(
+                    f"Edit range {match.group('start')}-{match.group('end')} is outside video duration ({duration:.2f}s)"
+                )
+            rest = match.group("rest")
+            if rest.startswith("+"):
+                rest = rest[1:]
+            elif rest:
+                return
 
 
 def validate_source_filename(filename: object) -> str:

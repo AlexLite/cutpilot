@@ -8,14 +8,34 @@ from typing import Any
 
 _TIME = r"\d{1,2}(?:\.\d{2}){1,2}"
 _RANGE = rf"({_TIME})\s*[-–]\s*({_TIME})"
-_NOISE = re.compile(r"\b(?:сделай|сделать|обработай|обработать|видео|файл|формат|разрешение|размер|до|примерно|и|в|на|для|мне|пожалуйста|без|наложи|наложить|склей|склеить|соедини|соединить|объедини|объединить|оставь|оставить|логотип\w*|лого|cut)\b", re.I)
+_NOISE = re.compile(r"\b(?:сделай|сделать|обработай|обработать|сожми|сжать|видео|файл|формат|разрешение|размер|до|примерно|и|в|на|для|мне|пожалуйста|без|наложи|наложить|склей|склеить|соедини|соединить|объедини|объединить|оставь|оставить|логотип\w*|лого|cut)\b", re.I)
+_EDGE_CUT = re.compile(r"(?:вырежи|вырезать|удали|удалить|убери|убрать|cut).*?перв\w*\s+(\d+)\s*(секунд\w*|минут\w*).*?(?:в\s+конц\w*|последн\w*)\s+(\d+)\s*(секунд\w*|минут\w*)", re.I)
 
 
-def simple_plan(task: str) -> dict[str, Any] | None:
+def simple_plan(task: str, duration_seconds: float | str | None = None) -> dict[str, Any] | None:
     """Return a plan only when every meaningful part of the request is known."""
     text = task.casefold().replace("ё", "е")
     commands: list[str] = []
     consumed = text
+
+    edge_cut = _EDGE_CUT.search(text)
+    if edge_cut:
+        if duration_seconds is None:
+            return None
+        try:
+            duration = int(float(duration_seconds))
+            first = int(edge_cut.group(1)) * (60 if edge_cut.group(2).startswith("минут") else 1)
+            last = int(edge_cut.group(3)) * (60 if edge_cut.group(4).startswith("минут") else 1)
+        except (TypeError, ValueError):
+            return None
+        if duration <= first + last:
+            return None
+        def timestamp(value: int) -> str:
+            hours, remainder = divmod(value, 3600)
+            minutes, seconds = divmod(remainder, 60)
+            return f"{hours:02d}.{minutes:02d}.{seconds:02d}" if hours else f"{minutes:02d}.{seconds:02d}"
+        commands.append(f"-crp-{timestamp(0)}-{timestamp(first)}+{timestamp(duration - last)}-{timestamp(duration)}")
+        consumed = consumed[:edge_cut.start()] + " " + consumed[edge_cut.end():]
 
     if re.search(r"\b(?:mp4|mpeg[- ]?4)\b", text):
         commands.append("-mp4")
