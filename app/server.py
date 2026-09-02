@@ -367,6 +367,24 @@ def make_handler(service: CutPilotService):
                 except OSError:
                     _json_response(self, HTTPStatus.INTERNAL_SERVER_ERROR, {"error": "Queue is not available"})
                 return
+            if self.path == "/api/jobs/stream":
+                self.send_response(HTTPStatus.OK)
+                self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+                self.send_header("Cache-Control", "no-cache")
+                self.send_header("X-Accel-Buffering", "no")
+                self.end_headers()
+                previous = None
+                try:
+                    for _ in range(30):
+                        payload = json.dumps({"jobs": service.jobs()}, ensure_ascii=False, separators=(",", ":"))
+                        if payload != previous:
+                            self.wfile.write(f"data: {payload}\n\n".encode("utf-8"))
+                            self.wfile.flush()
+                            previous = payload
+                        time.sleep(2)
+                except (BrokenPipeError, ConnectionResetError, OSError):
+                    pass
+                return
             if self.path in {"/", "/index.html"}:
                 body = (Path(__file__).parent / "static" / "index.html").read_bytes()
                 self.send_response(HTTPStatus.OK)
