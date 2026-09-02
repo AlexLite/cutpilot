@@ -106,8 +106,12 @@ class CutPilotService:
                 try:
                     duration = float(values.get("duration", "0") or 0)
                     out_time = float(values.get("out_time_ms", "0") or 0)
-                except ValueError:
+                except (TypeError, ValueError):
                     duration = out_time = 0
+                try:
+                    updated_at = int(values.get("updated_at", "0") or 0)
+                except (TypeError, ValueError):
+                    updated_at = 0
                 if duration > 0 and out_time >= 0:
                     progress = str(min(100, max(0, round(out_time / 1_000_000 / duration * 100))))
                 result.append({
@@ -115,7 +119,7 @@ class CutPilotService:
                     "source": name,
                     "status": status,
                     "message": message,
-                    "updated_at": int(values.get("updated_at", "0") or 0),
+                    "updated_at": updated_at,
                     "progress": progress,
                     "out_time_ms": values.get("out_time_ms", ""),
                 })

@@ -24,6 +24,18 @@ class StorageJobTests(unittest.TestCase):
                 "status": "completed", "message": "clip_nologo.mp4",
             })
 
+    def test_corrupt_progress_values_do_not_break_history_read(self):
+        from app.server import CutPilotService
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            progress = root / ".cutpilot-progress"
+            progress.mkdir()
+            (progress / "clip.mp4.abc.progress").write_text("status=processing\nupdated_at=not-a-number\nduration=bad\n", encoding="utf-8")
+            jobs = CutPilotService(ai=object(), ai_cut_directory=root / "AI_Cut", cutpilot_directory=root).jobs()
+            self.assertEqual(jobs[0]["source"], "clip.mp4")
+            self.assertEqual(jobs[0]["updated_at"], 0)
+
 
 if __name__ == "__main__":
     unittest.main()
