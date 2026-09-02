@@ -6,6 +6,7 @@ from dataclasses import dataclass
 import hashlib
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import uuid
@@ -24,6 +25,17 @@ class SourceFile:
     modified_ns: int
     changed_ns: int
     fingerprint: str | None = None
+
+
+def _with_increment(filename: str, number: int) -> str:
+    path = Path(filename)
+    stem = path.stem
+    command_marker = re.search(r"\s+\[cmd(?:\s|-).*$", stem, re.IGNORECASE)
+    if command_marker:
+        stem = f"{stem[:command_marker.start()].rstrip()}_{number}{stem[command_marker.start():]}"
+    else:
+        stem = f"{stem}_{number}"
+    return f"{stem}{path.suffix}"
 
 
 def _fingerprint(path: Path) -> str:
@@ -108,14 +120,18 @@ def handoff(directory: Path, cutpilot_directory: Path, plan: ValidatedPlan, expe
 
     destination_root = cutpilot_directory.resolve()
     destination_root.mkdir(parents=True, exist_ok=True)
-    destination = (destination_root / plan.staged_filename).resolve()
-    if destination.parent != destination_root:
-        raise JobError("Unsafe destination filename")
-    if destination.exists():
-        raise JobError("A job with this filename already exists in the CutPilot queue")
-    result = destination_root / build_worker_output_filename(plan.staged_filename)
-    if result.exists():
-        raise JobError("The CutPilot result already exists; refusing to overwrite it")
+    staged_filename = plan.staged_filename
+    for number in range(1000):
+        candidate = staged_filename if number == 0 else _with_increment(plan.staged_filename, number)
+        destination = (destination_root / candidate).resolve()
+        if destination.parent != destination_root:
+            raise JobError("Unsafe destination filename")
+        result = destination_root / build_worker_output_filename(candidate)
+        if not destination.exists() and not result.exists():
+            staged_filename = candidate
+            break
+    else:
+        raise JobError("Could not find a free result filename")
 
     temporary = destination_root / f".cutpilot.{uuid.uuid4().hex}.part"
     try:

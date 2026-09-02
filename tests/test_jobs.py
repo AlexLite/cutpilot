@@ -55,7 +55,7 @@ class JobTests(unittest.TestCase):
             with self.assertRaises(JobError):
                 handoff(ai_cut, root / "cutpilot", plan, selected)
 
-    def test_existing_worker_result_is_not_overwritten(self):
+    def test_existing_worker_result_gets_incremented_name(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             ai_cut = root / "AI_Cut"
@@ -66,8 +66,9 @@ class JobTests(unittest.TestCase):
             source.write_bytes(b"video bytes")
             (cutpilot / "sample_logo.mp4").write_bytes(b"existing result")
             plan = validate_plan("sample.mp4", {"commands": [], "summary": ""})
-            with self.assertRaises(JobError):
-                handoff(ai_cut, cutpilot, plan, source_metadata(ai_cut, "sample.mp4"))
+            handed = handoff(ai_cut, cutpilot, plan, source_metadata(ai_cut, "sample.mp4"))
+            self.assertEqual(handed, "sample_1.mp4")
+            self.assertEqual((cutpilot / handed).read_bytes(), b"video bytes")
 
     def test_expired_plan_cannot_be_confirmed(self):
         class FakeAI:
