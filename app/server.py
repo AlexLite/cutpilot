@@ -277,7 +277,7 @@ class CutPilotService:
         plan = replace(plan, task=normalized_task)
         self.store.save(plan_id, plan, selected, self.PENDING_TTL_SECONDS)
         logger.info("plan.ready plan_id=%s source=%r commands=%r staged=%r summary=%r", plan_id, plan.source_filename, plan.commands, plan.staged_filename, plan.summary)
-        return {"plan_id": plan_id, "source_filename": plan.source_filename, "staged_filename": plan.staged_filename, "commands": list(plan.commands), "summary": plan.summary}
+        return {"plan_id": plan_id, "source_filename": plan.source_filename, "staged_filename": build_queue_filename(plan.source_filename, plan.commands), "commands": list(plan.commands), "summary": plan.summary}
 
     def confirm(self, plan_id: str, confirmed: bool) -> dict[str, str]:
         logger.info("job.confirm plan_id=%r confirmed=%r", plan_id, confirmed)
