@@ -27,9 +27,8 @@ async function loadJobs() {
   const data = await response.json();
   if (!response.ok) throw new Error(data.error || 'Не удалось получить очередь');
   const queue = document.querySelector('#queue');
-  const activeQueue = document.querySelector('#active-queue');
-  const historyQueue = document.querySelector('#history-queue');
   const activeList = document.querySelector('#active-list');
+  const historySidebar = document.querySelector('#history-sidebar');
   const historyList = document.querySelector('#history-list');
   const active = data.jobs.filter((job) => ['queued', 'processing', 'cancelling'].includes(job.status));
   const history = data.jobs.filter((job) => !['queued', 'processing', 'cancelling'].includes(job.status));
@@ -56,9 +55,8 @@ async function loadJobs() {
   };
   activeList.replaceChildren(...active.slice(0, 20).map(renderJob));
   historyList.replaceChildren(...history.slice(0, 20).map(renderJob));
-  activeQueue.hidden = !active.length;
-  historyQueue.hidden = !history.length;
-  queue.hidden = !active.length && !history.length;
+  historySidebar.hidden = !history.length;
+  queue.hidden = !active.length;
 }
 
 document.querySelector('#plan').onclick = async () => {
