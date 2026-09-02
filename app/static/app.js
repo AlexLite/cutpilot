@@ -16,6 +16,10 @@ function applySimpleCopy() {
   document.querySelector('.topbar h1').textContent = 'Напиши что надо, сделаю сам';
   document.querySelector('.welcome p').textContent = 'Опишите задачу обычным языком — я отправлю в работу.';
   document.querySelector('#plan').textContent = 'В работу';
+  document.querySelector('.hint')?.remove();
+  const sourceLabel = document.querySelector('label[for="source"]');
+  sourceLabel.innerHTML = 'Исходное видео из папки <button class="path-link" type="button">AI_Cut</button>';
+  sourceLabel.querySelector('.path-link').onclick = () => copyFolderPath();
   document.querySelector('#instructions').innerHTML = `
     <div class="welcome"><h2>Как работать с видео</h2><p>Сначала положите видео в папку, затем напишите, что нужно сделать.</p></div>
     <div class="instruction-card"><h3>1. Скопируйте видео</h3><p>Скопируйте нужный видеофайл в папку <code>AI_Cut</code>.</p></div>
@@ -28,15 +32,40 @@ function applySimpleCopy() {
 
 applySimpleCopy();
 
+const FOLDER_PATH = '\\\\cutpilot.sova.lan\\cutpilot\\AI_Cut';
+async function copyFolderPath() {
+  try {
+    await navigator.clipboard.writeText(FOLDER_PATH);
+  } catch {
+    const helper = document.createElement('textarea');
+    helper.value = FOLDER_PATH;
+    helper.style.position = 'fixed';
+    helper.style.opacity = '0';
+    document.body.append(helper);
+    helper.select();
+    document.execCommand('copy');
+    helper.remove();
+  }
+  show(`Путь скопирован: ${FOLDER_PATH}`);
+}
+
 function setupFileTools() {
   const composer = document.querySelector('.composer');
+  const planButton = document.querySelector('#plan');
+  const taskInput = document.querySelector('#task');
+  const taskBox = document.createElement('div');
+  taskBox.className = 'task-box';
+  planButton.remove();
+  taskInput.replaceWith(taskBox);
+  taskBox.append(taskInput, planButton);
   const tools = document.createElement('div');
   tools.className = 'file-tools';
-  tools.innerHTML = '<label class="drop-zone" tabindex="0">Перетащите видео сюда или нажмите для выбора<input type="file" accept="video/*,.mkv,.ts,.m2ts,.mts" hidden></label><button class="folder-button" type="button">Открыть папку</button>';
+  tools.innerHTML = '<label class="upload-choice"><input type="checkbox"> Или копируйте сюда</label><label class="drop-zone" tabindex="0" hidden>Перетащите видео сюда или нажмите для выбора<input type="file" accept="video/*,.mkv,.ts,.m2ts,.mts" hidden></label>';
   composer.append(tools);
+  const choice = tools.querySelector('.upload-choice input');
   const zone = tools.querySelector('.drop-zone');
-  const input = tools.querySelector('input');
-  const folder = tools.querySelector('.folder-button');
+  const input = tools.querySelector('input[type="file"]');
+  choice.addEventListener('change', () => { zone.hidden = !choice.checked; });
   const upload = async (file) => {
     if (!file) return;
     show(`Загружаю: ${file.name}`);
@@ -56,11 +85,6 @@ function setupFileTools() {
   zone.addEventListener('dragover', (event) => { event.preventDefault(); zone.classList.add('dragover'); });
   zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
   zone.addEventListener('drop', (event) => { event.preventDefault(); zone.classList.remove('dragover'); upload(event.dataTransfer.files[0]); });
-  folder.addEventListener('click', async () => {
-    const path = '\\\\cutpilot.sova.lan\\cutpilot\\AI_Cut';
-    try { await navigator.clipboard.writeText(path); show(`Путь к папке скопирован: ${path}`); } catch { show(`Путь к папке: ${path}`); }
-    window.open('file://///cutpilot.sova.lan/cutpilot/AI_Cut', '_blank');
-  });
 }
 
 setupFileTools();
