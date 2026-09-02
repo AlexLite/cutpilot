@@ -180,6 +180,7 @@ class CutPilotService:
     def create_plan(self, source: str, task: str) -> dict[str, Any]:
         if not isinstance(task, str) or not 1 <= len(task.strip()) <= 4000:
             raise CommandValidationError("Task must contain 1-4000 characters")
+        logger.info("plan.start source=%r task=%r", source, task.strip())
         selected = source_metadata(self.ai_cut_directory, source)
         normalized_task = task.strip()
         raw = simple_plan(normalized_task) if isinstance(self.ai, OpenRouterAdapter) else None
@@ -210,9 +211,11 @@ class CutPilotService:
             validate_edit_duration(plan.commands, duration)
         plan_id = secrets.token_urlsafe(24)
         self.store.save(plan_id, plan, selected, self.PENDING_TTL_SECONDS)
+        logger.info("plan.ready plan_id=%s source=%r commands=%r staged=%r summary=%r", plan_id, plan.source_filename, plan.commands, plan.staged_filename, plan.summary)
         return {"plan_id": plan_id, "source_filename": plan.source_filename, "staged_filename": plan.staged_filename, "commands": list(plan.commands), "summary": plan.summary}
 
     def confirm(self, plan_id: str, confirmed: bool) -> dict[str, str]:
+        logger.info("job.confirm plan_id=%r confirmed=%r", plan_id, confirmed)
         if confirmed is not True:
             raise JobError("Explicit confirmation is required")
         if not isinstance(plan_id, str) or not 1 <= len(plan_id) <= 200:
@@ -226,8 +229,10 @@ class CutPilotService:
             name = handoff(self.ai_cut_directory, self.cutpilot_directory, plan, selected)
         except (JobError, OSError) as exc:
             self.store.update_job(plan_id, "failed", str(exc))
+            logger.exception("job.handoff_failed plan_id=%s source=%r", plan_id, plan.source_filename)
             raise
         self.store.update_job(plan_id, "queued", name)
+        logger.info("job.handoff_ok plan_id=%s source=%r staged=%r", plan_id, plan.source_filename, name)
         return {"status": "queued", "filename": name}
 
 
@@ -301,15 +306,21 @@ def make_handler(service: CutPilotService):
             _json_response(self, HTTPStatus.NOT_FOUND, {"error": "Not found"})
 
         def do_POST(self) -> None:  # noqa: N802
+            request_id = secrets.token_hex(8)
+            logger.info("http.start request_id=%s path=%s", request_id, self.path)
             if self.path == "/api/upload":
                 try:
                     length = int(self.headers.get("Content-Length", "0"))
                     filename = self.headers.get("X-Filename", "")
+                    logger.info("upload.start request_id=%s filename=%r bytes=%s", request_id, filename, length)
                     result = {"filename": service.upload(filename, self.rfile, length)}
+                    logger.info("upload.ok request_id=%s result=%r", request_id, result)
                     _json_response(self, HTTPStatus.OK, result)
                 except (CommandValidationError, JobError, ValueError) as exc:
+                    logger.exception("upload.failed request_id=%s error=%s", request_id, exc)
                     _json_response(self, HTTPStatus.BAD_REQUEST, {"error": str(exc)})
                 except OSError:
+                    logger.exception("upload.failed request_id=%s local_file_error", request_id)
                     _json_response(self, HTTPStatus.INTERNAL_SERVER_ERROR, {"error": "Local file operation failed"})
                 return
             if self.path not in {"/api/plan", "/api/jobs", "/api/jobs/cancel"}:
@@ -322,6 +333,7 @@ def make_handler(service: CutPilotService):
                 payload = json.loads(self.rfile.read(length).decode("utf-8"))
                 if not isinstance(payload, dict):
                     raise ValueError("JSON object expected")
+                logger.info("http.payload request_id=%s path=%s payload=%r", request_id, self.path, payload)
                 if self.path == "/api/plan":
                     result = service.create_plan(payload.get("source"), payload.get("task"))
                 elif self.path == "/api/jobs/cancel":
@@ -329,10 +341,13 @@ def make_handler(service: CutPilotService):
                     result = {"status": "cancelling"}
                 else:
                     result = service.confirm(payload.get("plan_id"), payload.get("confirmed"))
+                logger.info("http.ok request_id=%s path=%s result=%r", request_id, self.path, result)
                 _json_response(self, HTTPStatus.OK, result)
             except (CommandValidationError, JobError, AIProviderError, ValueError) as exc:
+                logger.exception("http.failed request_id=%s path=%s error=%s", request_id, self.path, exc)
                 _json_response(self, HTTPStatus.BAD_REQUEST, {"error": str(exc)})
             except OSError:
+                logger.exception("http.failed request_id=%s path=%s local_file_error", request_id, self.path)
                 _json_response(self, HTTPStatus.INTERNAL_SERVER_ERROR, {"error": "Local file operation failed"})
 
         def log_message(self, format: str, *args: object) -> None:
