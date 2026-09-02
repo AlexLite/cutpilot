@@ -19,6 +19,7 @@ from urllib.parse import unquote
 from .ai import AIProviderError, OpenRouterAdapter
 from .commands import CommandValidationError, ValidatedPlan, validate_edit_duration, validate_plan, validate_source_filename
 from .jobs import JobError, handoff, list_sources, source_metadata
+from .learned import LearnedDictionary
 from .media import probe_media
 from .rules import simple_plan
 from .storage import PlanStore
@@ -81,6 +82,8 @@ class CutPilotService:
         self.cutpilot_directory = Path(cutpilot_directory or os.environ.get("CUTPILOT_DIRECTORY", "/srv/cutpilot"))
         db_path = Path(os.environ.get("CUTPILOT_DB_PATH", str(self.cutpilot_directory / "cutpilot.db")))
         self.store = PlanStore(db_path)
+        dictionary_path = Path(os.environ.get("CUTPILOT_DICTIONARY_PATH", "/var/lib/cutpilot/learned_dictionary.json"))
+        self.learned = LearnedDictionary(dictionary_path)
 
     def files(self) -> list[dict[str, Any]]:
         return [
@@ -183,8 +186,12 @@ class CutPilotService:
         logger.info("plan.start source=%r task=%r", source, task.strip())
         selected = source_metadata(self.ai_cut_directory, source)
         normalized_task = task.strip()
-        raw = simple_plan(normalized_task) if isinstance(self.ai, OpenRouterAdapter) else None
+        raw = self.learned.lookup(normalized_task) if isinstance(self.ai, OpenRouterAdapter) else None
         used_ai = False
+        if raw is not None:
+            logger.info("Using learned dictionary plan: task=%r plan=%r", normalized_task, raw)
+        else:
+            raw = simple_plan(normalized_task) if isinstance(self.ai, OpenRouterAdapter) else None
         if raw is not None:
             logger.info("Using local rule plan: task=%r plan=%r", normalized_task, raw)
         else:
@@ -222,6 +229,9 @@ class CutPilotService:
         else:
             raise CommandValidationError("Не удалось подготовить план")
         plan_id = secrets.token_urlsafe(24)
+        if used_ai:
+            status = self.learned.record(normalized_task, plan.commands, plan.summary)
+            logger.info("dictionary.record task=%r commands=%r status=%s", normalized_task, plan.commands, status)
         self.store.save(plan_id, plan, selected, self.PENDING_TTL_SECONDS)
         logger.info("plan.ready plan_id=%s source=%r commands=%r staged=%r summary=%r", plan_id, plan.source_filename, plan.commands, plan.staged_filename, plan.summary)
         return {"plan_id": plan_id, "source_filename": plan.source_filename, "staged_filename": plan.staged_filename, "commands": list(plan.commands), "summary": plan.summary}
