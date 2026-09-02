@@ -184,6 +184,7 @@ class CutPilotService:
         selected = source_metadata(self.ai_cut_directory, source)
         normalized_task = task.strip()
         raw = simple_plan(normalized_task) if isinstance(self.ai, OpenRouterAdapter) else None
+        used_ai = False
         if raw is not None:
             logger.info("Using local rule plan: task=%r plan=%r", normalized_task, raw)
         else:
@@ -195,20 +196,31 @@ class CutPilotService:
             if isinstance(self.ai, OpenRouterAdapter):
                 raw = simple_plan(normalized_task, metadata.get("duration_seconds"))
             if raw is None:
+                used_ai = True
                 raw = self.ai.create_plan(selected.name, metadata, normalized_task)
-        raw = _correct_edit_intent(raw, task.strip())
-        raw = _correct_logo_intent(raw, task.strip())
-        try:
-            plan = validate_plan(selected.name, raw)
-        except CommandValidationError:
-            logger.exception("AI plan validation failed: source=%s raw=%r", selected.name, raw)
-            raise
-        if any(command.startswith("-crp") for command in plan.commands):
+        max_attempts = max(1, min(10, int(os.environ.get("CUTPILOT_AI_MAX_ATTEMPTS", "10"))))
+        seen_plans: set[str] = set()
+        for attempt in range(1, max_attempts + 1):
+            corrected = _correct_edit_intent(raw, task.strip())
+            corrected = _correct_logo_intent(corrected, task.strip())
+            fingerprint = repr(corrected)
             try:
-                duration = probe_media(self.ai_cut_directory / selected.name).get("duration_seconds")
-            except (OSError, StopIteration, TypeError, ValueError, subprocess.SubprocessError) as exc:
-                raise CommandValidationError("Не удалось проверить длительность видео для таймкодов") from exc
-            validate_edit_duration(plan.commands, duration)
+                plan = validate_plan(selected.name, corrected)
+                if any(command.startswith("-crp") for command in plan.commands):
+                    duration = probe_media(self.ai_cut_directory / selected.name).get("duration_seconds")
+                    validate_edit_duration(plan.commands, duration)
+                break
+            except (CommandValidationError, OSError, StopIteration, TypeError, ValueError, subprocess.SubprocessError) as exc:
+                if not used_ai or attempt >= max_attempts or fingerprint in seen_plans:
+                    logger.exception("AI plan validation failed: source=%s attempt=%s raw=%r", selected.name, attempt, corrected)
+                    if isinstance(exc, (OSError, StopIteration, TypeError, ValueError, subprocess.SubprocessError)):
+                        raise CommandValidationError("Не удалось проверить план и длительность видео") from exc
+                    raise
+                seen_plans.add(fingerprint)
+                logger.warning("AI plan rejected; retrying: source=%s attempt=%s/%s error=%s", selected.name, attempt, max_attempts, exc)
+                raw = self.ai.create_plan(selected.name, metadata, normalized_task, feedback=str(exc))
+        else:
+            raise CommandValidationError("Не удалось подготовить план")
         plan_id = secrets.token_urlsafe(24)
         self.store.save(plan_id, plan, selected, self.PENDING_TTL_SECONDS)
         logger.info("plan.ready plan_id=%s source=%r commands=%r staged=%r summary=%r", plan_id, plan.source_filename, plan.commands, plan.staged_filename, plan.summary)

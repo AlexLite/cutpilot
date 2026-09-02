@@ -22,7 +22,7 @@ class OpenRouterAdapter:
         self.model = model or os.environ.get("OPENROUTER_MODEL", "").strip()
         self.endpoint = endpoint or os.environ.get("OPENROUTER_ENDPOINT", "https://openrouter.ai/api/v1/chat/completions")
 
-    def create_plan(self, source_filename: str, metadata: dict[str, Any], task: str) -> dict[str, Any]:
+    def create_plan(self, source_filename: str, metadata: dict[str, Any], task: str, feedback: str | None = None) -> dict[str, Any]:
         if not self.api_key or not self.model:
             raise AIProviderError("AI provider is not configured")
 
@@ -34,11 +34,12 @@ class OpenRouterAdapter:
             "the first 10 seconds is exactly -crp-00.00-00.10; never use -crp-0-10 or colons. "
             "Logo semantics: 'с лого', 'добавь/оставь логотип' means keep the logo and never emit -nl/-nologo; "
             "'без лого', 'убери/удали логотип' means emit -nologo. "
+            "If the user object contains 'e', it is the previous validation error: return a corrected plan, not an explanation. "
             "No shell, FFmpeg, paths, URLs, or other commands. Ambiguous task: commands=[] and brief summary. "
             "summary <=160 characters."
         )
         user = json.dumps(
-            {"n": source_filename, "m": metadata, "t": task},
+            {"n": source_filename, "m": metadata, "t": task, **({"e": feedback} if feedback else {})},
             ensure_ascii=False,
             separators=(",", ":"),
         )

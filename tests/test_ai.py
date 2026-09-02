@@ -28,6 +28,13 @@ class AIAdapterTests(unittest.TestCase):
         self.assertEqual(user, {"n": "clip.mov", "m": {"size_bytes": 123}, "t": "сделать MP4"})
         self.assertEqual(payload["max_tokens"], 160)
 
+    def test_repair_feedback_is_sent_only_on_retry(self):
+        adapter = OpenRouterAdapter(api_key="test", model="test", endpoint="http://127.0.0.1/test")
+        with patch("app.ai.urlopen", return_value=_Response()) as urlopen:
+            adapter.create_plan("clip.mov", {"size_bytes": 123}, "сделать MP4", feedback="Unknown command: -Nmb")
+        user = json.loads(json.loads(urlopen.call_args.args[0].data)["messages"][1]["content"])
+        self.assertEqual(user["e"], "Unknown command: -Nmb")
+
 
 if __name__ == "__main__":
     unittest.main()
