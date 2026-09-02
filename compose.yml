@@ -13,8 +13,12 @@ services:
       CUTPILOT_PORT: 8787
       CUTPILOT_AI_CUT_DIRECTORY: /srv/cutpilot/AI_Cut
       CUTPILOT_DIRECTORY: /srv/cutpilot
+      CUTPILOT_DB_PATH: /var/lib/cutpilot/cutpilot.db
+      CUTPILOT_PROGRESS_DIR: /var/lib/cutpilot/progress
+      CUTPILOT_DICTIONARY_PATH: /var/lib/cutpilot/learned_dictionary.json
     volumes:
       - ${CUTPILOT_DATA_DIRECTORY:-./data/cutpilot}:/srv/cutpilot
+      - ${CUTPILOT_STATE_DIRECTORY:-./data/cutpilot-state}:/var/lib/cutpilot
     read_only: true
     tmpfs:
       - /tmp
