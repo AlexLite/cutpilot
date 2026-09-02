@@ -290,11 +290,16 @@ encode(){
   common+=(-filter_complex "$FILTER" -map '[v]')
   [[ -n "$AUDIO_MAP" ]] && common+=(-map "$AUDIO_MAP")
   common+=(-map_metadata 0 -map_chapters 0)
-  (( TARGET_FPS > 0 )) && common+=(-r "$TARGET_FPS") || common+=(-fps_mode passthrough)
+  if (( TARGET_FPS > 0 )); then
+    common+=(-r "$TARGET_FPS")
+  elif [[ "$mode" != cpu ]]; then
+    common+=(-fps_mode passthrough)
+  fi
   if (( TARGET_BYTES > 0 )); then common+=(-c:a aac -b:a 128k)
   elif (( AUDIO_REENCODE )); then common+=(-c:a aac -b:a "$SRC_AUDIO_BITRATE")
   else common+=(-c:a copy); fi
   if [[ "$mode" == cpu ]]; then
+    common+=(-pix_fmt yuv420p -shortest)
     if [[ "$codec" == hevc ]]; then
       common+=(-c:v libx265 -preset fast)
     else
