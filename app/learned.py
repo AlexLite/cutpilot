@@ -18,7 +18,11 @@ class LearnedDictionary:
 
     def __init__(self, path: Path):
         self.path = Path(path)
-        self.path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            self.available = True
+        except OSError:
+            self.available = False
 
     def _read(self) -> dict[str, Any]:
         try:
@@ -33,6 +37,8 @@ class LearnedDictionary:
         os.replace(temporary, self.path)
 
     def lookup(self, phrase: str) -> dict[str, Any] | None:
+        if not self.available:
+            return None
         entry = self._read()["entries"].get(normalize_phrase(phrase))
         if not isinstance(entry, dict) or entry.get("status") != "approved":
             return None
@@ -42,6 +48,8 @@ class LearnedDictionary:
         return {"commands": commands, "summary": entry.get("summary", "Локальный план из словаря")}
 
     def record(self, phrase: str, commands: tuple[str, ...], summary: str) -> str:
+        if not self.available:
+            return "disabled"
         key = normalize_phrase(phrase)
         data = self._read()
         entries = data["entries"]
