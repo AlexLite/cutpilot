@@ -35,6 +35,9 @@ class RulePlanTests(unittest.TestCase):
     def test_natural_compress_synonym_is_understood(self):
         self.assertEqual(simple_plan("уменьши до 100 Мб")["commands"], ["-100mb"])
 
+    def test_reencode_to_mov_with_logo_is_understood(self):
+        self.assertEqual(simple_plan("перекодируй в mov с лого")["commands"], ["-mov"])
+
 
 if __name__ == "__main__":
     unittest.main()
