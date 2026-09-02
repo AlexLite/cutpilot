@@ -35,6 +35,9 @@
     .welcome p { margin:0; color:var(--muted); }
     .welcome-mark { width:54px; height:54px; margin:auto; border-radius:16px; font-size:1.2rem; }
     .composer { margin-top:2rem; padding:1rem; background:#2f2f2f; border:1px solid #454545; border-radius:14px; box-shadow:0 8px 25px #0002; }
+    .source-picker { flex:1; min-width:0; }
+    .source-line { display:flex; gap:.75rem; align-items:center; }
+    .source-line > label { flex:1; margin:0; }
     .file-tools { flex:1; min-width:260px; }
     .drop-zone { display:block; padding:.75rem; color:var(--muted); border:1px dashed #626262; border-radius:9px; text-align:center; cursor:pointer; }
     .drop-zone.dragover { color:var(--text); border-color:var(--accent); background:#153b32; }
@@ -50,6 +53,7 @@
     textarea { min-height:92px; resize:vertical; }
     .compose-row { display:flex; gap:.75rem; align-items:end; }
     .compose-row > div { flex:1; min-width:260px; }
+    .source-picker select { margin-top:.55rem; }
     .send { width:auto; min-width:116px; padding:.75rem 1rem; color:white; background:var(--accent); border:0; border-radius:9px; cursor:pointer; font-weight:600; }
     .send:hover { filter:brightness(1.1); }
     .hint { margin:.7rem 0 0; color:var(--muted); font-size:.78rem; }
@@ -67,7 +71,7 @@
     .instruction-card h3 { margin:0 0 .35rem; font-size:1rem; }
     .instruction-card p { margin:.25rem 0; color:#c8c8c8; }
     code { padding:.12rem .3rem; color:#b7e9dc; background:#151515; border-radius:4px; }
-    @media (max-width:700px) { .layout { grid-template-columns:1fr; } aside { display:block; border-right:0; border-bottom:1px solid #303030; } .side-note { margin-top:0; } .topbar { padding:0 1rem; } .tabs { padding-left:1rem; } .pane { padding:1.5rem 1rem 5rem; } .welcome { margin:2rem auto 1.5rem; } .compose-row { display:block; } .send { width:100%; margin-top:.75rem; } }
+    @media (max-width:700px) { .layout { grid-template-columns:1fr; } aside { display:block; border-right:0; border-bottom:1px solid #303030; } .side-note { margin-top:0; } .topbar { padding:0 1rem; } .tabs { padding-left:1rem; } .pane { padding:1.5rem 1rem 5rem; } .welcome { margin:2rem auto 1.5rem; } .compose-row { display:block; } .source-line { display:block; } .source-line .file-tools { margin-top:.55rem; } .send { width:100%; margin-top:.75rem; } }
   </style>
 </head>
 <body>
