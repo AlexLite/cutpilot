@@ -26,3 +26,8 @@ LXC.
 The first release sends only the selected basename, byte size, and user task to
 the configured provider. It does not upload video bytes and does not expose a
 shell or FFmpeg endpoint.
+
+Automatic removal of a silent tail is enabled for files dropped directly into
+the watcher queue. Plans handed off by the API from `AI_Cut` are marked with
+`-nocut`, so their tail is never removed implicitly. Set
+`CUTPILOT_AUTO_TAIL_CUT=0` to disable the behavior for direct queue drops too.

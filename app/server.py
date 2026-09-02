@@ -12,20 +12,43 @@ import re
 import secrets
 import shutil
 import subprocess
+import threading
+import time
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 from urllib.parse import unquote
 
 from .ai import AIProviderError, OpenRouterAdapter
-from .commands import CommandValidationError, ValidatedPlan, validate_edit_duration, validate_plan, validate_source_filename
-from .jobs import JobError, handoff, list_sources, source_metadata
+from .commands import CommandValidationError, ValidatedPlan, build_worker_output_filename, validate_edit_duration, validate_plan, validate_source_filename
+from .jobs import JobError, _with_increment, handoff, list_sources, source_metadata, with_no_auto_tail
 from .learned import LearnedDictionary
 from .media import probe_media
 from .rules import simple_plan
 from .storage import PlanStore
 
 logger = logging.getLogger("cutpilot.server")
+_CONFIRM_LOCK = threading.Lock()
+
+
+class _RateLimiter:
+    """Small process-local limiter for the LAN-only HTTP surface."""
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._hits: dict[tuple[str, str], list[float]] = {}
+
+    def allow(self, client: str, route: str, limit: int) -> bool:
+        now = time.monotonic()
+        key = (client, route)
+        with self._lock:
+            hits = [value for value in self._hits.get(key, []) if now - value < 60]
+            if len(hits) >= limit:
+                self._hits[key] = hits
+                return False
+            hits.append(now)
+            self._hits[key] = hits
+            return True
 
 
 def _correct_logo_intent(raw: Any, task: str) -> Any:
@@ -260,21 +283,38 @@ class CutPilotService:
             raise JobError("Explicit confirmation is required")
         if not isinstance(plan_id, str) or not 1 <= len(plan_id) <= 200:
             raise JobError("Invalid plan id")
-        item = self.store.take(plan_id)
-        if item is None:
-            raise JobError("Plan is missing or has already been used")
-        plan, selected = item
-        self.store.create_job(plan_id, plan)
-        try:
-            name = handoff(self.ai_cut_directory, self.cutpilot_directory, plan, selected)
-        except (JobError, OSError) as exc:
-            self.store.update_job(plan_id, "failed", str(exc))
-            logger.exception("job.handoff_failed plan_id=%s source=%r", plan_id, plan.source_filename)
-            raise
-        self.store.update_job(plan_id, "queued", name)
-        if isinstance(self.ai, OpenRouterAdapter):
-            status = self.learned.record(plan.task, plan.commands, plan.summary)
-            logger.info("dictionary.record task=%r commands=%r status=%s", plan.task, plan.commands, status)
+        # The HTTP server is threaded. Serialize the consume-and-handoff
+        # critical section so two confirmations cannot select the same free
+        # queue/result name at the same time.
+        with _CONFIRM_LOCK:
+            item = self.store.take(plan_id)
+            if item is None:
+                raise JobError("Plan is missing or has already been used")
+            plan, selected = item
+            self.cutpilot_directory.mkdir(parents=True, exist_ok=True)
+            reserved = False
+            for number in range(1000):
+                candidate = plan.staged_filename if number == 0 else _with_increment(plan.staged_filename, number)
+                result = self.cutpilot_directory / build_worker_output_filename(candidate)
+                if (self.cutpilot_directory / candidate).exists() or result.exists():
+                    continue
+                candidate_plan = replace(plan, staged_filename=with_no_auto_tail(candidate))
+                if self.store.create_job(plan_id, candidate_plan):
+                    plan = candidate_plan
+                    reserved = True
+                    break
+            if not reserved:
+                raise JobError("Could not reserve a free result filename")
+            try:
+                name = handoff(self.ai_cut_directory, self.cutpilot_directory, plan, selected, allow_increment=False)
+            except (JobError, OSError) as exc:
+                self.store.update_job(plan_id, "failed", str(exc))
+                logger.exception("job.handoff_failed plan_id=%s source=%r", plan_id, plan.source_filename)
+                raise
+            self.store.update_job(plan_id, "queued", name)
+            if isinstance(self.ai, OpenRouterAdapter):
+                status = self.learned.record(plan.task, plan.commands, plan.summary)
+                logger.info("dictionary.record task=%r commands=%r status=%s", plan.task, plan.commands, status)
         logger.info("job.handoff_ok plan_id=%s source=%r staged=%r", plan_id, plan.source_filename, name)
         return {"status": "queued", "filename": name}
 
@@ -291,6 +331,8 @@ def _json_response(handler: BaseHTTPRequestHandler, status: int, data: dict[str,
 
 
 def make_handler(service: CutPilotService):
+    limiter = _RateLimiter()
+
     class Handler(BaseHTTPRequestHandler):
         server_version = "CutPilot/0.1"
 
@@ -351,6 +393,15 @@ def make_handler(service: CutPilotService):
         def do_POST(self) -> None:  # noqa: N802
             request_id = secrets.token_hex(8)
             logger.info("http.start request_id=%s path=%s", request_id, self.path)
+            limits = {
+                "/api/plan": int(os.environ.get("CUTPILOT_RATE_LIMIT_PLAN", "10")),
+                "/api/upload": int(os.environ.get("CUTPILOT_RATE_LIMIT_UPLOAD", "6")),
+                "/api/jobs": int(os.environ.get("CUTPILOT_RATE_LIMIT_CONFIRM", "30")),
+                "/api/jobs/cancel": int(os.environ.get("CUTPILOT_RATE_LIMIT_CANCEL", "30")),
+            }
+            if self.path in limits and not limiter.allow(self.client_address[0], self.path, max(1, limits[self.path])):
+                _json_response(self, HTTPStatus.TOO_MANY_REQUESTS, {"error": "Слишком много запросов. Повторите позже."})
+                return
             if self.path == "/api/upload":
                 try:
                     length = int(self.headers.get("Content-Length", "0"))

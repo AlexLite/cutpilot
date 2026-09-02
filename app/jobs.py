@@ -42,6 +42,15 @@ def _with_increment(filename: str, number: int) -> str:
     return f"{stem}{path.suffix}"
 
 
+def with_no_auto_tail(filename: str) -> str:
+    """Mark API handoffs so the watcher skips implicit tail trimming."""
+    path = Path(filename)
+    marker = re.search(r"\s+\[cmd.*\](?=\.[^.]+$)", path.name, re.IGNORECASE)
+    if marker:
+        return f"{path.name[:marker.end() - 1]} -nocut]{path.suffix}"
+    return f"{path.stem} [cmd -nocut]{path.suffix}"
+
+
 def _fingerprint(path: Path) -> str:
     """Hash a small stable sample instead of reading the whole video."""
     digest = hashlib.blake2b(digest_size=16)
@@ -106,7 +115,7 @@ def source_metadata(directory: Path, filename: str) -> SourceFile:
     return SourceFile(path.name, stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns, _fingerprint(path))
 
 
-def handoff(directory: Path, cutpilot_directory: Path, plan: ValidatedPlan, expected: SourceFile) -> str:
+def handoff(directory: Path, cutpilot_directory: Path, plan: ValidatedPlan, expected: SourceFile, *, allow_increment: bool = True) -> str:
     source = _direct_file(directory, plan.source_filename)
     current = source.stat()
     if (
@@ -121,6 +130,8 @@ def handoff(directory: Path, cutpilot_directory: Path, plan: ValidatedPlan, expe
     destination_root.mkdir(parents=True, exist_ok=True)
     with _HANDOFF_LOCK:
         for number in range(1000):
+            if number and not allow_increment:
+                break
             candidate = plan.staged_filename if number == 0 else _with_increment(plan.staged_filename, number)
             destination = (destination_root / candidate).resolve()
             if destination.parent != destination_root:
