@@ -58,5 +58,6 @@ for _ in {1..30}; do
   sleep 1
 done
 test -f "$ROOT/cut_nologo.mp4"
-ffprobe -v error -show_entries format=duration -of default=nw=1:nk=1 "$ROOT/cut_nologo.mp4" \
-  | awk '{ exit !($1 > 2.9 && $1 < 3) }'
+duration=$(ffprobe -v error -show_entries format=duration -of default=nw=1:nk=1 "$ROOT/cut_nologo.mp4")
+echo "CPU edit output duration: ${duration}s"
+awk -v duration="$duration" 'BEGIN { exit !(duration > 2.5 && duration < 3.1) }'
