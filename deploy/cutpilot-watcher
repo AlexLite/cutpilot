@@ -23,6 +23,14 @@ mkdir -p "$WATCH_DIR" "$RUN_DIR" "$STABLE_DIR" "$LOCK_DIR" "$PROGRESS_DIR"
 find "$LOCK_DIR" -mindepth 1 -maxdepth 1 -type d -empty -exec rmdir {} + 2>/dev/null || true
 touch "$LOG_FILE"
 log(){ printf '%s %s\n' "$(date -Is)" "$*" >> "$LOG_FILE"; }
+publish_output(){
+  local temporary=$1 output=$2
+  # GNU mv -n publishes atomically without replacing an output created by a
+  # concurrent job. The source remains available if publication loses a race.
+  [[ ! -e "$output" ]] || return 1
+  mv -n -- "$temporary" "$output" || return 1
+  [[ ! -e "$temporary" && -f "$output" ]]
+}
 valid_video(){ local ext=${1##*.}; case "${ext,,}" in mp4|mkv|mov|avi|m4v|webm|ts|m2ts|mts) return 0;; *) return 1;; esac; }
 processable_file(){
   local name base
@@ -188,7 +196,7 @@ remux(){
   if ffmpeg -nostdin -hide_banner -loglevel error -xerror -y -i "$input" \
       -map 0 -c copy -map_metadata 0 -map_chapters 0 "$temporary" \
       && validate_output "$temporary"; then
-    mv -f "$temporary" "$output" && rm -f "$input" "${input%.*}.error.txt" "$(state_file "$input")" && write_progress "$PROGRESS_FILE" completed "$(basename "$output")"
+    publish_output "$temporary" "$output" && rm -f "$input" "${input%.*}.error.txt" "$(state_file "$input")" && write_progress "$PROGRESS_FILE" completed "$(basename "$output")"
     log "Created: $(basename "$output"); removed original: $(basename "$input")"
     return 0
   fi
@@ -402,7 +410,13 @@ process_file(){
   if ! validate_output "$tmp"; then
       rm -f "$tmp"; write_error "$input" "Output validation failed; source retained for retry"; write_progress "$PROGRESS_FILE" failed "Output validation failed; source retained for retry"; return 1
   fi
-  mv -f "$tmp" "$output" && rm -f "$input" "${input%.*}.error.txt" "$(state_file "$input")" && write_progress "$PROGRESS_FILE" completed "$(basename "$output")" && log "Created: $(basename "$output"); removed original: $name"
+  if ! publish_output "$tmp" "$output"; then
+    rm -f "$tmp"
+    write_error "$input" "Output already exists; source retained"
+    write_progress "$PROGRESS_FILE" failed "Output already exists; source retained"
+    return 1
+  fi
+  rm -f "$input" "${input%.*}.error.txt" "$(state_file "$input")" && write_progress "$PROGRESS_FILE" completed "$(basename "$output")" && log "Created: $(basename "$output"); removed original: $name"
 }
 
 stable_enough(){
