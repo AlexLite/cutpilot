@@ -19,8 +19,13 @@ jobs:
       - name: Shell checks
         run: |
           sudo apt-get update
-          sudo apt-get install --yes shellcheck
+          sudo apt-get install --yes ffmpeg shellcheck
+          sudo install -D -m 0755 deploy/cutpilot-probe.py /usr/local/libexec/cutpilot-probe
           bash -n deploy/cutpilot-watcher
+          bash -n tests/integration_watcher.sh
           shellcheck --severity=error deploy/cutpilot-watcher
+          shellcheck --severity=error tests/integration_watcher.sh
+      - name: FFmpeg watcher integration
+        run: bash tests/integration_watcher.sh
       - name: Docker build
         run: docker build --tag cutpilot:ci .
