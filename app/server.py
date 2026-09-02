@@ -19,8 +19,8 @@ from typing import Any
 from urllib.parse import unquote
 
 from .ai import AIProviderError, OpenRouterAdapter
-from .commands import CommandValidationError, ValidatedPlan, validate_edit_duration, validate_plan, validate_source_filename
-from .jobs import JobError, handoff, list_sources, source_metadata
+from .commands import CommandValidationError, ValidatedPlan, build_worker_output_filename, validate_edit_duration, validate_plan, validate_source_filename
+from .jobs import JobError, _with_increment, handoff, list_sources, source_metadata
 from .learned import LearnedDictionary
 from .media import probe_media
 from .rules import simple_plan
@@ -270,9 +270,22 @@ class CutPilotService:
             if item is None:
                 raise JobError("Plan is missing or has already been used")
             plan, selected = item
-            self.store.create_job(plan_id, plan)
+            self.cutpilot_directory.mkdir(parents=True, exist_ok=True)
+            reserved = False
+            for number in range(1000):
+                candidate = plan.staged_filename if number == 0 else _with_increment(plan.staged_filename, number)
+                result = self.cutpilot_directory / build_worker_output_filename(candidate)
+                if (self.cutpilot_directory / candidate).exists() or result.exists():
+                    continue
+                candidate_plan = replace(plan, staged_filename=candidate)
+                if self.store.create_job(plan_id, candidate_plan):
+                    plan = candidate_plan
+                    reserved = True
+                    break
+            if not reserved:
+                raise JobError("Could not reserve a free result filename")
             try:
-                name = handoff(self.ai_cut_directory, self.cutpilot_directory, plan, selected)
+                name = handoff(self.ai_cut_directory, self.cutpilot_directory, plan, selected, allow_increment=False)
             except (JobError, OSError) as exc:
                 self.store.update_job(plan_id, "failed", str(exc))
                 logger.exception("job.handoff_failed plan_id=%s source=%r", plan_id, plan.source_filename)

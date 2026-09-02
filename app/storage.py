@@ -43,11 +43,16 @@ class PlanStore:
                     staged_filename TEXT NOT NULL,
                     status TEXT NOT NULL,
                     message TEXT NOT NULL DEFAULT '',
+                    result_filename TEXT NOT NULL DEFAULT '',
                     created_at REAL NOT NULL,
                     updated_at REAL NOT NULL
                 )"""
             )
+            job_columns = {row[1] for row in db.execute("PRAGMA table_info(jobs)")}
+            if "result_filename" not in job_columns:
+                db.execute("ALTER TABLE jobs ADD COLUMN result_filename TEXT NOT NULL DEFAULT ''")
             db.execute("CREATE INDEX IF NOT EXISTS idx_jobs_updated_at ON jobs(updated_at DESC)")
+            db.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_active_job_results ON jobs(result_filename) WHERE result_filename != '' AND status IN ('queued', 'processing')")
 
     def _connect(self) -> sqlite3.Connection:
         db = sqlite3.connect(self.path, timeout=10)
@@ -107,13 +112,18 @@ class PlanStore:
         )
         return plan, source
 
-    def create_job(self, job_id: str, plan: ValidatedPlan) -> None:
+    def create_job(self, job_id: str, plan: ValidatedPlan) -> bool:
         now = time.time()
-        with closing(self._connect()) as db, db:
-            db.execute(
-                "INSERT INTO jobs (id, source, staged_filename, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
-                (job_id, plan.source_filename, plan.staged_filename, "queued", now, now),
-            )
+        from .commands import build_worker_output_filename
+        try:
+            with closing(self._connect()) as db, db:
+                db.execute(
+                    "INSERT INTO jobs (id, source, staged_filename, result_filename, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    (job_id, plan.source_filename, plan.staged_filename, build_worker_output_filename(plan.staged_filename), "queued", now, now),
+                )
+        except sqlite3.IntegrityError:
+            return False
+        return True
 
     def update_job(self, job_id: str, status: str, message: str = "") -> None:
         with closing(self._connect()) as db, db:
