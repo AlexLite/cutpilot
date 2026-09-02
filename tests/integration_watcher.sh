@@ -23,6 +23,7 @@ CUTPILOT_RUN_DIR="$ROOT/run" \
 CUTPILOT_LOG_FILE="$ROOT/watcher.log" \
 CUTPILOT_PROBE_BIN="${CUTPILOT_PROBE_BIN:-/usr/local/libexec/cutpilot-probe}" \
 CUTPILOT_STABLE_DELAY=1 \
+CUTPILOT_WORKER_MODE=cpu \
 bash deploy/cutpilot-watcher &
 WATCHER_PID=$!
 
@@ -37,3 +38,17 @@ ffprobe -v error -select_streams v:0 \
   | grep -qx 'h264|320|180'
 ffprobe -v error -show_entries format=duration -of default=nw=1:nk=1 "$ROOT/input_nologo.mp4" \
   | grep -Eq '^3(\.0+)?$'
+
+rm -f "$ROOT/input_nologo.mp4"
+ffmpeg -hide_banner -loglevel error -y \
+  -f lavfi -i testsrc2=size=320x180:rate=25 \
+  -f lavfi -i sine=frequency=1000:sample_rate=48000 -t 3 \
+  -c:v libx264 -pix_fmt yuv420p -c:a aac "$ROOT/cut.mp4"
+mv "$ROOT/cut.mp4" "$ROOT/cut [cmd -crp-00.01-00.02 -nl].mp4"
+for _ in {1..30}; do
+  [[ -f "$ROOT/cut_nologo.mp4" ]] && break
+  sleep 1
+done
+test -f "$ROOT/cut_nologo.mp4"
+ffprobe -v error -show_entries format=duration -of default=nw=1:nk=1 "$ROOT/cut_nologo.mp4" \
+  | awk '{ exit !($1 > 2.9 && $1 < 3) }'
