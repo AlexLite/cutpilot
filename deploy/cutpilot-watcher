@@ -240,13 +240,9 @@ target_bitrate(){
     echo "$usable"
     return
   fi
-  case "$TARGET_HEIGHT" in
-    1080) echo 5000000 ;;
-    720) echo 3000000 ;;
-    480) echo 1500000 ;;
-    360) echo 800000 ;;
-    *) echo 0 ;;
-  esac
+  # Resolution is a quality target, not a fixed bitrate target. Let the
+  # selected encoder allocate bits according to scene complexity.
+  echo 0
 }
 
 prepare_edit(){
@@ -336,8 +332,6 @@ encode(){
     common+=(-preset p4 -tune hq -spatial_aq 1 -temporal_aq 1 -aq-strength 8)
     if (( bitrate > 0 )); then
       common+=(-rc:v vbr -b:v "$bitrate" -maxrate:v "$bitrate" -bufsize:v "$((bitrate*2))")
-    elif (( SRC_BITRATE > 0 )); then
-      common+=(-rc:v vbr -b:v "$SRC_BITRATE" -maxrate:v "$((SRC_BITRATE*125/100))" -bufsize:v "$((SRC_BITRATE*2))")
     else
       common+=(-rc:v vbr -cq:v 22 -b:v 0)
     fi
@@ -346,8 +340,6 @@ encode(){
     [[ "$codec" == hevc ]] && common+=(-c:v hevc_vaapi -profile:v main -level:v 5.1) || common+=(-c:v h264_vaapi -profile:v high -level:v 5.1)
     if (( bitrate > 0 )); then
       common+=(-rc_mode CBR -b:v "$bitrate")
-    elif (( SRC_BITRATE > 0 )); then
-      common+=(-rc_mode CBR -b:v "$SRC_BITRATE")
     else
       common+=(-rc_mode CQP -qp 23)
     fi
