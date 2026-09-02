@@ -63,7 +63,7 @@ function setupFileTools() {
   const tools = document.createElement('div');
   tools.className = 'file-tools';
   tools.innerHTML = '<label class="drop-zone" tabindex="0">Или перетащите видео сюда или нажмите для выбора<input type="file" accept="video/*,.mkv,.ts,.m2ts,.mts" hidden></label>';
-  composeRow.insertBefore(tools, planButton);
+  composeRow.append(tools);
   const zone = tools.querySelector('.drop-zone');
   const input = tools.querySelector('input[type="file"]');
   const upload = async (file) => {
