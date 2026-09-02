@@ -65,9 +65,13 @@ def simple_plan(task: str, duration_seconds: float | str | None = None) -> dict[
 
     negative_logo = bool(re.search(r"(?:без|убер(?:и|ать)|удал(?:и|ить)|remove)\s+(?:логотип\w*|лого)", text))
     positive_logo = bool(re.search(r"(?:с|остав(?:ь|ить)|добав(?:ь|ить)|with)\s+(?:логотип\w*|лого)", text))
+    overlay_logo = bool(re.search(r"(?:наложи|наложить|нанеси|нанести|поставь|поставить)\s+(?:логотип\w*|лого)", text))
     if negative_logo:
         commands.append("-nologo")
         consumed = re.sub(r"(?:без|убер(?:и|ать)|удал(?:и|ить)|remove)\s+(?:логотип\w*|лого)", " ", consumed)
+    elif overlay_logo:
+        commands.append("-nl")
+        consumed = re.sub(r"(?:наложи|наложить|нанеси|нанести|поставь|поставить)\s+(?:логотип\w*|лого)", " ", consumed)
     elif positive_logo:
         consumed = re.sub(r"(?:с|остав(?:ь|ить)|добав(?:ь|ить)|with)\s+(?:логотип\w*|лого)", " ", consumed)
 

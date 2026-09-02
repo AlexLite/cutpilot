@@ -27,7 +27,7 @@ class RulePlanTests(unittest.TestCase):
 
     def test_trim_by_timecode_is_local_and_keeps_explicit_logo(self):
         plan = simple_plan("Обрезать по таймкоду 1.25-1.55 и наложить лого")
-        self.assertEqual(plan["commands"], ["-crp-1.25-1.55"])
+        self.assertEqual(plan["commands"], ["-crp-1.25-1.55", "-nl"])
 
 
 if __name__ == "__main__":
