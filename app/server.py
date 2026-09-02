@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict
+from dataclasses import replace
 import json
 import logging
 import os
@@ -101,7 +102,9 @@ class CutPilotService:
             raise JobError("A file with this name already exists in AI_Cut")
         if shutil.disk_usage(self.ai_cut_directory).free < length:
             raise JobError("Not enough free space for upload")
-        temporary = self.ai_cut_directory / f".{filename}.part"
+        # Each request gets its own staging name.  A shared `.{filename}.part`
+        # lets a concurrent failed upload delete another request's tempfile.
+        temporary = self.ai_cut_directory / f".upload.{secrets.token_hex(16)}.part"
         try:
             with temporary.open("xb") as target:
                 remaining = length
@@ -113,9 +116,18 @@ class CutPilotService:
                     remaining -= len(chunk)
                 target.flush()
                 os.fsync(target.fileno())
-            os.replace(temporary, destination)
-        except OSError as exc:
-            temporary.unlink(missing_ok=True)
+            # link() publishes without overwriting a concurrently-created
+            # destination; rename/replace would reintroduce a TOCTOU race.
+            try:
+                os.link(temporary, destination)
+            except FileExistsError as exc:
+                raise JobError("A file with this name already exists in AI_Cut") from exc
+            temporary.unlink()
+        except (OSError, JobError) as exc:
+            try:
+                temporary.unlink(missing_ok=True)
+            except OSError:
+                pass
             raise JobError("Could not save uploaded file") from exc
         return filename
 
@@ -194,6 +206,12 @@ class CutPilotService:
             raw = simple_plan(normalized_task) if isinstance(self.ai, OpenRouterAdapter) else None
         if raw is not None:
             logger.info("Using local rule plan: task=%r plan=%r", normalized_task, raw)
+            metadata: dict[str, Any] = {"size_bytes": selected.size}
+            if any(isinstance(command, str) and command.startswith("-crp") for command in raw.get("commands", [])):
+                try:
+                    metadata.update(probe_media(self.ai_cut_directory / selected.name))
+                except (OSError, StopIteration, TypeError, ValueError, subprocess.SubprocessError) as exc:
+                    logger.warning("Media probe unavailable for %s: %s", selected.name, exc)
         else:
             metadata: dict[str, Any] = {"size_bytes": selected.size}
             try:
@@ -205,7 +223,7 @@ class CutPilotService:
             if raw is None:
                 used_ai = True
                 raw = self.ai.create_plan(selected.name, metadata, normalized_task)
-        max_attempts = max(1, min(10, int(os.environ.get("CUTPILOT_AI_MAX_ATTEMPTS", "10"))))
+        max_attempts = max(1, min(10, int(os.environ.get("CUTPILOT_AI_MAX_ATTEMPTS", "3"))))
         seen_plans: set[str] = set()
         for attempt in range(1, max_attempts + 1):
             corrected = _correct_edit_intent(raw, task.strip())
@@ -214,7 +232,9 @@ class CutPilotService:
             try:
                 plan = validate_plan(selected.name, corrected)
                 if any(command.startswith("-crp") for command in plan.commands):
-                    duration = probe_media(self.ai_cut_directory / selected.name).get("duration_seconds")
+                    duration = metadata.get("duration_seconds")
+                    if duration is None:
+                        duration = probe_media(self.ai_cut_directory / selected.name).get("duration_seconds")
                     validate_edit_duration(plan.commands, duration)
                 break
             except (CommandValidationError, OSError, StopIteration, TypeError, ValueError, subprocess.SubprocessError) as exc:
@@ -229,9 +249,7 @@ class CutPilotService:
         else:
             raise CommandValidationError("Не удалось подготовить план")
         plan_id = secrets.token_urlsafe(24)
-        if used_ai:
-            status = self.learned.record(normalized_task, plan.commands, plan.summary)
-            logger.info("dictionary.record task=%r commands=%r status=%s", normalized_task, plan.commands, status)
+        plan = replace(plan, task=normalized_task)
         self.store.save(plan_id, plan, selected, self.PENDING_TTL_SECONDS)
         logger.info("plan.ready plan_id=%s source=%r commands=%r staged=%r summary=%r", plan_id, plan.source_filename, plan.commands, plan.staged_filename, plan.summary)
         return {"plan_id": plan_id, "source_filename": plan.source_filename, "staged_filename": plan.staged_filename, "commands": list(plan.commands), "summary": plan.summary}
@@ -254,6 +272,9 @@ class CutPilotService:
             logger.exception("job.handoff_failed plan_id=%s source=%r", plan_id, plan.source_filename)
             raise
         self.store.update_job(plan_id, "queued", name)
+        if isinstance(self.ai, OpenRouterAdapter):
+            status = self.learned.record(plan.task, plan.commands, plan.summary)
+            logger.info("dictionary.record task=%r commands=%r status=%s", plan.task, plan.commands, status)
         logger.info("job.handoff_ok plan_id=%s source=%r staged=%r", plan_id, plan.source_filename, name)
         return {"status": "queued", "filename": name}
 
