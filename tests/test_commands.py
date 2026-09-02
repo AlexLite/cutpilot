@@ -1,6 +1,6 @@
 import unittest
 
-from app.commands import CommandValidationError, validate_plan
+from app.commands import CommandValidationError, validate_edit_duration, validate_plan
 
 
 class CommandNormalizationTests(unittest.TestCase):
@@ -15,6 +15,11 @@ class CommandNormalizationTests(unittest.TestCase):
     def test_rejects_unbounded_target_size(self):
         with self.assertRaises(CommandValidationError):
             validate_plan("clip.mp4", {"commands": ["-9999999gb"], "summary": "bad"})
+
+    def test_rejects_edit_range_outside_duration(self):
+        plan = validate_plan("clip.mp4", {"commands": ["-crp-00.00-01.10"], "summary": "cut"})
+        with self.assertRaises(CommandValidationError):
+            validate_edit_duration(plan.commands, 60)
 
 
 if __name__ == "__main__":

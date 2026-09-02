@@ -160,6 +160,34 @@ def validate_commands(commands: object) -> tuple[str, ...]:
     return tuple(commands)
 
 
+def validate_edit_duration(commands: tuple[str, ...], duration_seconds: float | str) -> None:
+    """Reject edit ranges that extend beyond the actual media duration."""
+    try:
+        duration = float(duration_seconds)
+    except (TypeError, ValueError) as exc:
+        raise CommandValidationError("Video duration is unavailable") from exc
+    if duration <= 0:
+        raise CommandValidationError("Video duration is invalid")
+    for command in commands:
+        if not command.startswith("-crp"):
+            continue
+        rest = command[5:]
+        while rest:
+            match = _EDIT.match(rest)
+            if match is None:
+                return
+            end = _time_to_seconds(match.group("end"))
+            if end > duration:
+                raise CommandValidationError(
+                    f"Edit range {match.group('start')}-{match.group('end')} is outside video duration ({duration:.2f}s)"
+                )
+            rest = match.group("rest")
+            if rest.startswith("+"):
+                rest = rest[1:]
+            elif rest:
+                return
+
+
 def validate_source_filename(filename: object) -> str:
     if not isinstance(filename, str) or not filename or len(filename) > 240:
         raise CommandValidationError("Invalid source filename")
