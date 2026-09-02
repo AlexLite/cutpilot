@@ -26,3 +26,8 @@ LXC.
 The first release sends only the selected basename, byte size, and user task to
 the configured provider. It does not upload video bytes and does not expose a
 shell or FFmpeg endpoint.
+
+Automatic removal of a silent tail is disabled by default, so the worker does
+not change a confirmed plan implicitly. Enable it explicitly with
+`CUTPILOT_AUTO_TAIL_CUT=1` in the worker service environment if this behavior
+is required for a particular installation.
