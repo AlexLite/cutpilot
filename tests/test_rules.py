@@ -32,6 +32,9 @@ class RulePlanTests(unittest.TestCase):
     def test_russian_file_size_unit_is_normalized(self):
         self.assertEqual(simple_plan("сожми до 100 Мегабайт")["commands"], ["-100mb"])
 
+    def test_natural_compress_synonym_is_understood(self):
+        self.assertEqual(simple_plan("уменьши до 100 Мб")["commands"], ["-100mb"])
+
 
 if __name__ == "__main__":
     unittest.main()
