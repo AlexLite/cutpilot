@@ -162,7 +162,7 @@ document.querySelector('#plan').onclick = async () => {
     confirmButton.style.display = 'block';
     show('Проверьте имя и команды.');
   } catch (error) {
-    show(`Ошибка: ${error.message}`);
+    show(error.message.startsWith('Не удалось безопасно') ? error.message : `Ошибка: ${error.message}`);
   }
 };
 

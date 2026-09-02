@@ -345,7 +345,13 @@ def make_handler(service: CutPilotService):
                 _json_response(self, HTTPStatus.OK, result)
             except (CommandValidationError, JobError, AIProviderError, ValueError) as exc:
                 logger.exception("http.failed request_id=%s path=%s error=%s", request_id, self.path, exc)
-                _json_response(self, HTTPStatus.BAD_REQUEST, {"error": str(exc)})
+                response = {"error": str(exc)}
+                if self.path == "/api/plan" and isinstance(exc, (CommandValidationError, AIProviderError)):
+                    response = {
+                        "error": "Не удалось безопасно подготовить план. Уточните действие, таймкоды или формат видео.",
+                        "code": "plan_unclear",
+                    }
+                _json_response(self, HTTPStatus.BAD_REQUEST, response)
             except OSError:
                 logger.exception("http.failed request_id=%s path=%s local_file_error", request_id, self.path)
                 _json_response(self, HTTPStatus.INTERNAL_SERVER_ERROR, {"error": "Local file operation failed"})
