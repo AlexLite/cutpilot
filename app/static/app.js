@@ -18,7 +18,7 @@ function applySimpleCopy() {
   document.querySelector('#plan').textContent = 'В работу';
   document.querySelector('.hint')?.remove();
   const sourceLabel = document.querySelector('label[for="source"]');
-  sourceLabel.innerHTML = 'Исходное видео из папки <button class="path-link" type="button">AI_Cut</button>';
+  sourceLabel.innerHTML = 'Выберите видео из папки <button class="path-link" type="button">AI_Cut</button>';
   sourceLabel.querySelector('.path-link').onclick = () => copyFolderPath();
   document.querySelector('#instructions').innerHTML = `
     <div class="welcome"><h2>Как работать с видео</h2><p>Сначала положите видео в папку, затем напишите, что нужно сделать.</p></div>
@@ -58,14 +58,14 @@ function setupFileTools() {
   planButton.remove();
   taskInput.replaceWith(taskBox);
   taskBox.append(taskInput, planButton);
+  const sourceColumn = source.closest('div');
+  const composeRow = sourceColumn.closest('.compose-row');
   const tools = document.createElement('div');
   tools.className = 'file-tools';
-  tools.innerHTML = '<label class="upload-choice"><input type="checkbox"> Или копируйте сюда</label><label class="drop-zone" tabindex="0" hidden>Перетащите видео сюда или нажмите для выбора<input type="file" accept="video/*,.mkv,.ts,.m2ts,.mts" hidden></label>';
-  composer.append(tools);
-  const choice = tools.querySelector('.upload-choice input');
+  tools.innerHTML = '<label class="drop-zone" tabindex="0">Или перетащите видео сюда или нажмите для выбора<input type="file" accept="video/*,.mkv,.ts,.m2ts,.mts" hidden></label>';
+  composeRow.insertBefore(tools, planButton);
   const zone = tools.querySelector('.drop-zone');
   const input = tools.querySelector('input[type="file"]');
-  choice.addEventListener('change', () => { zone.hidden = !choice.checked; });
   const upload = async (file) => {
     if (!file) return;
     show(`Загружаю: ${file.name}`);
