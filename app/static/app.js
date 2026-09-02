@@ -8,6 +8,63 @@ let planId = null;
 
 const show = (message) => { status.textContent = message; };
 
+function applySimpleCopy() {
+  document.querySelector('.brand-mark').innerHTML = '<img src="/static/cutpilot-logo.png" alt="CutPilot">';
+  document.querySelector('.brand-mark').style.background = 'transparent';
+  document.querySelector('.side-title').textContent = 'Локальный AI видеоредактор';
+  document.querySelector('.side-note')?.remove();
+  document.querySelector('.topbar h1').textContent = 'Напиши что надо, сделаю сам';
+  document.querySelector('.welcome p').textContent = 'Опишите задачу обычным языком — я отправлю в работу.';
+  document.querySelector('#plan').textContent = 'В работу';
+  document.querySelector('#instructions').innerHTML = `
+    <div class="welcome"><h2>Как работать с видео</h2><p>Сначала положите видео в папку, затем напишите, что нужно сделать.</p></div>
+    <div class="instruction-card"><h3>1. Скопируйте видео</h3><p>Скопируйте нужный видеофайл в папку <code>AI_Cut</code>.</p></div>
+    <div class="instruction-card"><h3>2. Выберите видео и напишите задачу</h3><p>Выберите файл в списке и опишите задачу обычными словами.</p><p>Например: «сделай MP4 без логотипа» или «оставь фрагмент с 1.10 до 2.30».</p></div>
+    <div class="instruction-card"><h3>3. Проверьте план</h3><p>Программа покажет, что именно будет сделано. Если всё правильно, нажмите «Подтвердить».</p></div>
+    <div class="instruction-card"><h3>4. Дождитесь результата</h3><p>Текущая обработка появится внизу экрана в разделе «В работе». Завершённые задания будут в истории слева.</p></div>
+    <div class="instruction-card"><h3>Примеры задач</h3><p><code>Сделай MP4</code></p><p><code>Удали логотип</code></p><p><code>Добавь логотип</code></p><p><code>Оставь фрагмент с 0.15 до 0.50</code></p><p><code>Склей 0.15–0.50 и 1.25–2.13</code></p><p><code>Сделай MP4 1080p без логотипа</code></p></div>
+    <div class="instruction-card"><h3>Как писать время</h3><p><code>1.10</code> — 1 минута 10 секунд.</p><p><code>01.23.23</code> — 1 час 23 минуты 23 секунды.</p><p>Для нескольких фрагментов перечислите их через «и».</p></div>`;
+}
+
+applySimpleCopy();
+
+function setupFileTools() {
+  const composer = document.querySelector('.composer');
+  const tools = document.createElement('div');
+  tools.className = 'file-tools';
+  tools.innerHTML = '<label class="drop-zone" tabindex="0">Перетащите видео сюда или нажмите для выбора<input type="file" accept="video/*,.mkv,.ts,.m2ts,.mts" hidden></label><button class="folder-button" type="button">Открыть папку</button>';
+  composer.append(tools);
+  const zone = tools.querySelector('.drop-zone');
+  const input = tools.querySelector('input');
+  const folder = tools.querySelector('.folder-button');
+  const upload = async (file) => {
+    if (!file) return;
+    show(`Загружаю: ${file.name}`);
+    try {
+      const response = await fetch('/api/upload', {method: 'POST', headers: {'X-Filename': encodeURIComponent(file.name)}, body: file});
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Не удалось загрузить файл');
+      show(`Файл добавлен: ${data.filename}`);
+      await loadFiles();
+    } catch (error) {
+      show(`Ошибка загрузки: ${error.message}`);
+    }
+  };
+  zone.addEventListener('click', () => input.click());
+  zone.addEventListener('keydown', (event) => { if (event.key === 'Enter' || event.key === ' ') input.click(); });
+  input.addEventListener('change', () => upload(input.files[0]));
+  zone.addEventListener('dragover', (event) => { event.preventDefault(); zone.classList.add('dragover'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+  zone.addEventListener('drop', (event) => { event.preventDefault(); zone.classList.remove('dragover'); upload(event.dataTransfer.files[0]); });
+  folder.addEventListener('click', async () => {
+    const path = '\\\\cutpilot.sova.lan\\cutpilot\\AI_Cut';
+    try { await navigator.clipboard.writeText(path); show(`Путь к папке скопирован: ${path}`); } catch { show(`Путь к папке: ${path}`); }
+    window.open('file://///cutpilot.sova.lan/cutpilot/AI_Cut', '_blank');
+  });
+}
+
+setupFileTools();
+
 document.querySelectorAll('.tab').forEach((button) => button.addEventListener('click', () => {
   document.querySelectorAll('.tab, .pane').forEach((element) => element.classList.remove('active'));
   button.classList.add('active');
