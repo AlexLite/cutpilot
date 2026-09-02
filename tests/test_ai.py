@@ -27,6 +27,9 @@ class AIAdapterTests(unittest.TestCase):
         self.assertEqual(result, {"commands": [], "summary": "ok"})
         self.assertEqual(user, {"n": "clip.mov", "m": {"size_bytes": 123}, "t": "сделать MP4"})
         self.assertEqual(payload["max_tokens"], 160)
+        system = payload["messages"][0]["content"]
+        self.assertIn("Never return placeholders", system)
+        self.assertIn("сожми до 100 Мб", system)
 
     def test_repair_feedback_is_sent_only_on_retry(self):
         adapter = OpenRouterAdapter(api_key="test", model="test", endpoint="http://127.0.0.1/test")

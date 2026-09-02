@@ -28,12 +28,15 @@ class OpenRouterAdapter:
 
         system = (
             "Return JSON only: {commands:[string],summary:string}. Allowed commands: "
-            "-mp4|-mov|-hevc|-1080p|-720p|-480p|-360p|-Nfps (1..60)|-Nmb|-Ngb (positive), "
+            "-mp4|-mov|-hevc|-1080p|-720p|-480p|-360p|-<number>fps (1..60)|-<number>mb|-<number>gb (positive), "
             "-nl|-nologo|-nc|-nocut, -crp-START-END, -crp=START-END, "
             "-crp+START-END+START-END. Use MM.SS or HH.MM.SS with two-digit seconds: "
             "the first 10 seconds is exactly -crp-00.00-00.10; never use -crp-0-10 or colons. "
-            "Logo semantics: 'с лого', 'добавь/оставь логотип' means keep the logo and never emit -nl/-nologo; "
-            "'без лого', 'убери/удали логотип' means emit -nologo. "
+            "Never return placeholders such as N, START, END, <number>, or angle brackets literally. "
+            "Size examples: 'сожми до 100 Мб' -> '-100mb'; 'сожми до 2 Гб' -> '-2gb'. "
+            "Logo semantics: 'с лого' or 'оставь логотип' means keep the existing logo and emit neither -nl nor -nologo; "
+            "'наложи/добавь логотип' means emit -nl; 'без лого' or 'убери логотип' means emit -nologo. "
+            "Edit example: 'обрежь 1.25-1.55' -> '-crp-01.25-01.55'. "
             "If the user object contains 'e', it is the previous validation error: return a corrected plan, not an explanation. "
             "No shell, FFmpeg, paths, URLs, or other commands. Ambiguous task: commands=[] and brief summary. "
             "summary <=160 characters."
