@@ -2,92 +2,15 @@
 <html lang="ru">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>CutPilot — инструкция</title>
+  <meta http-equiv="refresh" content="0; url=http://cutpilot.sova.lan:8787/">
+  <title>CutPilot</title>
   <style>
-    :root { --bg:#101827; --panel:#172238; --panel2:#1d2b45; --text:#eef4ff; --muted:#a9b7ce; --blue:#65a9ff; --accent:#4fe0b6; --line:#2c3b56; --danger:#ffc469; }
-    * { box-sizing:border-box; }
-    body { margin:0; font:16px/1.55 "Segoe UI",Arial,sans-serif; color:var(--text); background:linear-gradient(135deg,#0c1320,#14233c); }
-    .wrap { max-width:1050px; margin:auto; padding:34px 22px 56px; }
-    header { display:flex; gap:18px; align-items:center; margin-bottom:24px; }
-    .mark { width:52px; height:52px; display:grid; place-items:center; border-radius:15px; background:linear-gradient(135deg,var(--blue),var(--accent)); color:#102039; font-weight:800; font-size:22px; }
-    h1 { margin:0; font-size:29px; line-height:1.15; } .sub { color:var(--muted); margin:4px 0 0; }
-    .tabs { display:flex; flex-wrap:wrap; gap:8px; margin:20px 0; }
-    .tab { border:1px solid var(--line); background:var(--panel); color:var(--text); border-radius:10px; padding:9px 14px; cursor:pointer; font:inherit; }
-    .tab.active,.tab:hover { border-color:var(--blue); background:#243b62; }
-    .tab.gpt-tab { border-color:#a94a55; color:#ffdce0; background:#482831; }
-    .tab.gpt-tab:hover,.tab.gpt-tab.active { border-color:#ff7586; background:#7a303d; color:#fff; }
-    .pane { display:none; background:rgba(23,34,56,.96); border:1px solid var(--line); border-radius:16px; padding:26px; box-shadow:0 18px 45px rgba(0,0,0,.2); }
-    .pane.active { display:block; } h2 { margin-top:0; font-size:23px; } h3 { margin:25px 0 8px; font-size:18px; color:var(--accent); }
-    .notice { border-left:4px solid var(--danger); background:#2c2930; border-radius:8px; padding:12px 15px; margin:16px 0; }
-    .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(245px,1fr)); gap:13px; }
-    .card { background:var(--panel2); border:1px solid var(--line); border-radius:12px; padding:14px; }
-    .card strong { display:block; color:var(--accent); margin-bottom:5px; }
-    code,.example { font-family:Consolas,"Courier New",monospace; font-size:.93em; background:#0e1626; border:1px solid #2b3a55; border-radius:7px; padding:2px 6px; color:#d9e8ff; }
-    .example { display:block; padding:11px; margin:10px 0; overflow-x:auto; white-space:pre-wrap; }
-    table { width:100%; border-collapse:collapse; margin:12px 0; } th,td { text-align:left; padding:10px; border-bottom:1px solid var(--line); vertical-align:top; } th { color:var(--muted); }
-    a { color:#86baff; } textarea { width:100%; min-height:365px; resize:vertical; background:#0d1524; color:var(--text); border:1px solid var(--line); border-radius:10px; padding:13px; font:14px/1.45 Consolas,"Courier New",monospace; }
-    .actions { display:flex; flex-wrap:wrap; gap:10px; margin:12px 0 18px; } .button { display:inline-block; background:var(--blue); color:#102039; border:0; border-radius:9px; padding:10px 14px; font-weight:700; cursor:pointer; text-decoration:none; }
-    .button.secondary { background:var(--panel2); color:var(--text); border:1px solid var(--line); } .status { color:var(--accent); min-height:24px; }
-    @media(max-width:600px){ .wrap{padding:20px 12px;} .pane{padding:18px;} h1{font-size:24px;} }
+    body { font: 18px system-ui, sans-serif; margin: 48px; color: #182033; }
+    a { color: #087fe8; }
   </style>
 </head>
 <body>
-  <main class="wrap">
-    <header><div class="mark">CP</div><div><h1>CutPilot</h1><p class="sub">Обработка видео из сетевой папки</p></div></header>
-    <p><a class="button" href="http://cutpilot.sova.lan:8787/">Открыть AI-агент CutPilot</a></p>
-    <nav class="tabs" aria-label="Разделы инструкции">
-      <button class="tab active" data-tab="start">Быстрый старт</button><button class="tab gpt-tab" data-tab="gpt">Помощник GPT</button><button class="tab" data-tab="commands">Команды</button><button class="tab" data-tab="edit">Обрезка и склейка</button>
-    </nav>
-
-    <section class="pane active" id="start"><h2>Как пользоваться</h2>
-      <ol><li>Скопируйте видео в папку <code>cutpilot</code>.</li><li>После копирования не открывайте, не переносите и не удаляйте файл.</li><li>Через 10 секунд начнётся обработка.</li><li>Дождитесь нового файла с <code>_logo</code> или <code>_nologo</code>.</li></ol>
-      <div class="notice">Не запускайте исходный ролик из сетевой папки до появления результата: открытый файл блокирует обработку и защищает результат от повреждения.</div>
-      <div class="grid"><div class="card"><strong>Без команд</strong>Логотип выбирается по ориентации. Разрешение и FPS сохраняются, видео кодируется на NVIDIA в высококачественном VBR-режиме с целевым средним битрейтом исходника.</div><div class="card"><strong>Тишина в конце</strong>Тишина тише −20 dB длительностью от 2 секунд сокращается до 1 секунды. <code>-nc</code> отключает это правило.</div><div class="card"><strong>Ошибки</strong>При проблеме рядом с исходником появляется <code>.error.txt</code>. Исходник остаётся в папке.</div><div class="card"><strong>Хранение</strong>Готовые файлы <code>_logo</code> и <code>_nologo</code> удаляются через 24 часа. Исходники и инструкции не удаляются.</div></div>
-    </section>
-
-    <section class="pane" id="commands"><h2>Команды в имени файла</h2>
-      <p>Добавляйте их перед расширением. Пробелы необязательны:</p><span class="example">Интервью [cmd -mp4 -1080p -25fps].mov
-Интервью [cmd-mp4-1080p-25fps].mov</span>
-      <table><tr><th>Команда</th><th>Что делает</th></tr><tr><td><code>-mp4</code></td><td>MP4, H.264 High@L5.1.</td></tr><tr><td><code>-mov</code></td><td>Контейнер MOV.</td></tr><tr><td><code>-hevc</code></td><td>H.265 / HEVC Main@L5.1, по умолчанию MP4.</td></tr><tr><td><code>-1080p</code>, <code>-720p</code>, <code>-480p</code>, <code>-360p</code></td><td>Высота видео.</td></tr><tr><td><code>-25fps</code></td><td>FPS от 1 до 60.</td></tr><tr><td><code>-1gb</code>, <code>-700mb</code></td><td>Приблизительный лимит размера.</td></tr><tr><td><code>-nl</code> / <code>-nologo</code></td><td>Без логотипа; результат получит <code>_nologo</code>.</td></tr><tr><td><code>-nc</code> / <code>-nocut</code></td><td>Не обрезать тихий хвост.</td></tr></table>
-    </section>
-
-    <section class="pane" id="edit"><h2>Обрезка и склейка</h2><p>Таймкод пишется через точку: <code>4.15</code> — 4 минуты 15 секунд; <code>01.23.23</code> — 1 час 23 минуты 23 секунды.</p>
-      <table><tr><th>Команда</th><th>Действие</th></tr><tr><td><code>-crp-4.15-4.36</code></td><td>Удалить участок 04:15–04:36.</td></tr><tr><td><code>-crp=4.15-4.36</code></td><td>Оставить только участок 04:15–04:36.</td></tr><tr><td><code>-crp+4.55-5.16+5.26-6.10</code></td><td>Оставить оба участка и склеить по порядку.</td></tr></table>
-      <span class="example">[cmd -crp-1.10-1.25+3.40-3.55]
-[cmd -crp-4.15-4.36 -mp4 -1080p]</span><p>Монтаж точный по времени. Звук на вырезанных участках перекодируется для синхронизации. При любой команде <code>-crp</code> автоматическая обрезка тихого хвоста отключается: итог задают только ваши таймкоды.</p>
-    </section>
-
-    <section class="pane" id="gpt"><h2>Помощник GPT</h2><p>Скопируйте этот промт в любой чат. Он сначала уточнит задачу, затем вернёт только готовое имя файла.</p><div class="actions"><button class="button" id="copy">Скопировать промт</button><a class="button secondary" href="https://chatgpt.com/" target="_blank" rel="noopener">ChatGPT</a><a class="button secondary" href="https://chat.deepseek.com/" target="_blank" rel="noopener">DeepSeek</a><a class="button secondary" href="https://chat.qwen.ai/" target="_blank" rel="noopener">Qwen</a><a class="button secondary" href="https://alice.yandex.ru/" target="_blank" rel="noopener">Яндекс GPT / Алиса</a></div><div class="status" id="status"></div>
-      <textarea id="prompt" readonly>Ты — помощник для самописного сервиса CutPilot. Сервис получает видеофайл из сетевой папки и читает команды в квадратных скобках перед расширением: [cmd команды].
-
-Сначала спроси у пользователя исходное имя файла с расширением и что он хочет сделать. Если данных не хватает, задай короткий уточняющий вопрос. После этого верни ТОЛЬКО одно готовое имя файла, без пояснений и без кавычек.
-
-Формат: Название [cmd команды].расширение. Команды можно сочетать и разделять пробелами.
-
--mp4 — контейнер MP4, H.264 High@L5.1.
--mov — контейнер MOV.
--hevc — H.265/HEVC Main@L5.1; если контейнер не задан, будет MP4.
--1080p, -720p, -480p, -360p — высота видео.
--Nfps — FPS от 1 до 60.
--Ngb или -Nmb — приблизительный лимит размера, например -1gb или -700mb.
--nl/-nologo — не накладывать логотип.
--nc/-nocut — не обрезать тихий хвост.
-
-Монтаж:
--crp-НАЧАЛО-КОНЕЦ — удалить участок.
--crp=НАЧАЛО-КОНЕЦ — оставить только участок.
--crp+НАЧАЛО-КОНЕЦ+НАЧАЛО-КОНЕЦ — оставить несколько участков и склеить по порядку.
-
-Если есть команда -crp, тихий хвост автоматически не обрезается: это равнозначно -nc.
-
-Таймкод через точку справа налево: 4.15 = 4 минуты 15 секунд; 01.23.23 = 1 час 23 минуты 23 секунды. Не используй двоеточия.
-Пример: Интервью [cmd -crp-4.15-4.36 -mp4 -1080p].mov</textarea>
-    </section>
-  </main>
-  <script>
-    document.querySelectorAll('.tab').forEach(button => button.addEventListener('click', () => { document.querySelectorAll('.tab,.pane').forEach(x => x.classList.remove('active')); button.classList.add('active'); document.getElementById(button.dataset.tab).classList.add('active'); }));
-    document.getElementById('copy').addEventListener('click', async () => { const prompt=document.getElementById('prompt'), status=document.getElementById('status'); try { await navigator.clipboard.writeText(prompt.value); status.textContent='Промт скопирован.'; } catch { prompt.select(); document.execCommand('copy'); status.textContent='Промт выделен и скопирован.'; } });
-  </script>
+  <p>Открываю web-интерфейс <strong>CutPilot</strong>…</p>
+  <p>Если переход не сработал, откройте <a href="http://cutpilot.sova.lan:8787/">CutPilot</a>.</p>
 </body>
 </html>
