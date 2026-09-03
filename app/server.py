@@ -57,7 +57,7 @@ def _correct_logo_intent(raw: Any, task: str) -> Any:
     if not isinstance(raw, dict) or not isinstance(raw.get("commands"), list):
         return raw
     lowered = task.casefold()
-    positive = bool(re.search(r"(?:с|c|добавь|добавить|оставь|оставить|наложи|наложить|нанеси|поставь|keep|with)\s*(?:лого|логотип|logo)", lowered))
+    positive = bool(re.search(r"(?:с|c|добавь|добавить|оставь|оставить|наложи|наложить|нанеси|поставь|приклей|приклеить|keep|with)\s*(?:лого|логотип|logo)", lowered))
     negative = bool(re.search(r"(?:без|убери|убрать|удали|удалить|remove)\s*(?:лого|логотип)", lowered))
     if positive and not negative:
         commands = [command for command in raw["commands"] if command not in {"-nl", "-nologo"}]
