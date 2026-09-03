@@ -122,6 +122,8 @@ def validate_commands(commands: object) -> tuple[str, ...]:
 
     seen: set[str] = set()
     container: str | None = None
+    resolution: str | None = None
+    fps_value: str | None = None
     edit_seen = False
 
     for command in commands:
@@ -143,8 +145,13 @@ def validate_commands(commands: object) -> tuple[str, ...]:
                 raise CommandValidationError("Only one output container is allowed")
             container = command[1:]
         elif re.fullmatch(r"-(?:1080|720|480|360)p", command):
-            pass
+            if resolution is not None:
+                raise CommandValidationError("Only one output resolution is allowed")
+            resolution = command
         elif re.fullmatch(r"-[1-9][0-9]?fps", command):
+            if fps_value is not None:
+                raise CommandValidationError("Only one output frame rate is allowed")
+            fps_value = command
             fps = int(command[1:-3])
             if not 1 <= fps <= 60:
                 raise CommandValidationError("FPS must be between 1 and 60")

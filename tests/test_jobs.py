@@ -21,7 +21,7 @@ class JobTests(unittest.TestCase):
             (ai_cut / "sample.mp4").write_bytes(b"video")
             service = CutPilotService(FakeAI(), ai_cut, root / "cutpilot")
             plan = service.create_plan("sample.mp4", "без логотипа")
-            self.assertEqual(plan["commands"], ["-nl"])
+            self.assertEqual(plan["commands"], ["-nologo"])
             self.assertEqual(service.ai.metadata, {"size_bytes": 5})
             with self.assertRaises(JobError):
                 service.confirm(plan["plan_id"], False)

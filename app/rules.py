@@ -65,16 +65,16 @@ def simple_plan(task: str, duration_seconds: float | str | None = None) -> dict[
         consumed = consumed.replace(match.group(0), " ")
 
     negative_logo = bool(re.search(r"(?:без|убер(?:и|ать)|удал(?:и|ить)|remove)\s+(?:логотип\w*|лого)", text))
-    positive_logo = bool(re.search(r"(?:с|c|остав(?:ь|ить)|добав(?:ь|ить)|with)\s+(?:логотип\w*|лого|logo)", text))
-    overlay_logo = bool(re.search(r"(?:наложи|наложить|нанеси|нанести|поставь|поставить|приклей|приклеить)\s+(?:логотип\w*|лого)", text))
+    positive_logo = bool(re.search(r"(?:с|c|остав(?:ь|ить)|with)\s+(?:логотип\w*|лого|logo)", text))
+    overlay_logo = bool(re.search(r"(?:добав(?:ь|ить)|наложи|наложить|нанеси|нанести|поставь|поставить|приклей|приклеить)\s+(?:логотип\w*|лого|logo)", text))
     if negative_logo:
         commands.append("-nologo")
         consumed = re.sub(r"(?:без|убер(?:и|ать)|удал(?:и|ить)|remove)\s+(?:логотип\w*|лого)", " ", consumed)
     elif overlay_logo:
         commands.append("-nl")
-        consumed = re.sub(r"(?:наложи|наложить|нанеси|нанести|поставь|поставить|приклей|приклеить)\s+(?:логотип\w*|лого)", " ", consumed)
+        consumed = re.sub(r"(?:добав(?:ь|ить)|наложи|наложить|нанеси|нанести|поставь|поставить|приклей|приклеить)\s+(?:логотип\w*|лого|logo)", " ", consumed)
     elif positive_logo:
-        consumed = re.sub(r"(?:с|остав(?:ь|ить)|добав(?:ь|ить)|with)\s+(?:логотип\w*|лого)", " ", consumed)
+        consumed = re.sub(r"(?:с|остав(?:ь|ить)|with)\s+(?:логотип\w*|лого|logo)", " ", consumed)
 
     if re.search(_MUTE_PHRASE, text):
         commands.append("-mute")

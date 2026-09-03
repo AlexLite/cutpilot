@@ -20,6 +20,10 @@ class CommandNormalizationTests(unittest.TestCase):
         plan = validate_plan("clip.mp4", {"commands": ["-mute"], "summary": "mute"})
         self.assertEqual(plan.commands, ("-mute",))
 
+    def test_rejects_multiple_resolutions(self):
+        with self.assertRaisesRegex(CommandValidationError, "one output resolution"):
+            validate_plan("clip.mp4", {"commands": ["-1080p", "-720p"], "summary": "bad"})
+
     def test_rejects_edit_range_outside_duration(self):
         plan = validate_plan("clip.mp4", {"commands": ["-crp-00.00-01.10"], "summary": "cut"})
         with self.assertRaises(CommandValidationError):

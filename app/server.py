@@ -57,15 +57,20 @@ def _correct_logo_intent(raw: Any, task: str) -> Any:
     if not isinstance(raw, dict) or not isinstance(raw.get("commands"), list):
         return raw
     lowered = task.casefold()
-    positive = bool(re.search(r"(?:с|c|добавь|добавить|оставь|оставить|наложи|наложить|нанеси|поставь|приклей|приклеить|keep|with)\s*(?:лого|логотип|logo)", lowered))
+    overlay = bool(re.search(r"(?:добавь|добавить|наложи|наложить|нанеси|нанести|поставь|поставить|приклей|приклеить)\s+(?:лого|логотип|logo)", lowered))
+    positive = bool(re.search(r"(?:с|c|оставь|оставить|keep|with)\s*(?:лого|логотип|logo)", lowered))
     negative = bool(re.search(r"(?:без|убери|убрать|удали|удалить|remove)\s*(?:лого|логотип)", lowered))
-    if positive and not negative:
+    if overlay and not negative:
+        commands = [command for command in raw["commands"] if command != "-nologo"]
+        if "-nl" not in commands:
+            commands.append("-nl")
+    elif positive and not negative:
         commands = [command for command in raw["commands"] if command not in {"-nl", "-nologo"}]
     else:
         commands = [command for command in raw["commands"] if command != "-nl"]
         if "-nologo" not in commands:
             commands.append("-nologo")
-    if len(commands) != len(raw["commands"]):
+    if commands != raw["commands"]:
         corrected = dict(raw)
         corrected["commands"] = commands
         logger.warning("Corrected logo intent: task=%r raw=%r corrected=%r", task, raw, corrected)
