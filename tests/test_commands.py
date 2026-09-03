@@ -16,6 +16,10 @@ class CommandNormalizationTests(unittest.TestCase):
         with self.assertRaises(CommandValidationError):
             validate_plan("clip.mp4", {"commands": ["-9999999gb"], "summary": "bad"})
 
+    def test_accepts_mute_command(self):
+        plan = validate_plan("clip.mp4", {"commands": ["-mute"], "summary": "mute"})
+        self.assertEqual(plan.commands, ("-mute",))
+
     def test_rejects_edit_range_outside_duration(self):
         plan = validate_plan("clip.mp4", {"commands": ["-crp-00.00-01.10"], "summary": "cut"})
         with self.assertRaises(CommandValidationError):

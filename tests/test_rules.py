@@ -45,6 +45,10 @@ class RulePlanTests(unittest.TestCase):
     def test_latin_c_before_logo_means_keep_logo(self):
         self.assertEqual(simple_plan("перекодируй в mov c лого")["commands"], ["-mov"])
 
+    def test_mute_aliases_disable_audio(self):
+        for task in ("убить звук", "замьютить", "убрать звук", "сделать тишину", "мьют", "mute"):
+            self.assertEqual(simple_plan(task)["commands"], ["-mute"], task)
+
 
 if __name__ == "__main__":
     unittest.main()
