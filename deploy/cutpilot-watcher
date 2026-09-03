@@ -177,12 +177,6 @@ write_error(){
 validate_audio(){
   # HAS_AUDIO is populated by the single input probe. Keep the decode check,
   # but do not start another ffprobe just to rediscover stream presence.
-  if (( MUTE_AUDIO )); then
-    local audio_streams
-    audio_streams=$(ffprobe -v error -select_streams a:0 -show_entries stream=index -of csv=p=0 "$1" 2>/dev/null || true)
-    [[ -z "$audio_streams" ]]
-    return
-  fi
   (( HAS_AUDIO )) || return 0
   ffmpeg -hide_banner -v error -xerror -i "$1" -map '0:a?' -vn -sn -dn -f null - >/dev/null 2>&1
 }
@@ -200,6 +194,12 @@ validate_output(){
   duration=$(sed -n '1p' <<< "$format"); size=$(sed -n '2p' <<< "$format")
   [[ "$duration" =~ ^[0-9.]+$ && "$size" =~ ^[0-9]+$ && "$size" -gt 0 ]] || return 1
   (( TARGET_BYTES == 0 || size <= TARGET_BYTES )) || return 1
+  if (( MUTE_AUDIO )); then
+    local audio_streams
+    audio_streams=$(ffprobe -v error -select_streams a:0 -show_entries stream=index -of csv=p=0 "$1" 2>/dev/null || true)
+    [[ -z "$audio_streams" ]]
+    return
+  fi
   validate_audio "$1"
 }
 
