@@ -14,6 +14,10 @@ class RulePlanTests(unittest.TestCase):
         plan = simple_plan("склей 0.15-0.50+1.25-2.13 и оставь лого")
         self.assertEqual(plan["commands"], ["-crp+0.15-0.50+1.25-2.13"])
 
+    def test_collect_ranges_means_concatenate(self):
+        plan = simple_plan("собери 0.16-0.25+1.20-1.25 пересчитай в mov и наложи лого")
+        self.assertEqual(plan["commands"], ["-mov", "-crp+0.16-0.25+1.20-1.25", "-nl"])
+
     def test_complex_request_falls_back_to_ai(self):
         self.assertIsNone(simple_plan("сделай как для телеграма, но сохрани качество"))
 
