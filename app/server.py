@@ -20,7 +20,7 @@ from typing import Any
 from urllib.parse import unquote
 
 from .ai import AIProviderError, OpenRouterAdapter
-from .commands import CommandValidationError, ValidatedPlan, build_queue_filename, validate_edit_duration, validate_plan, validate_source_filename
+from .commands import CommandValidationError, ValidatedPlan, build_queue_filename, build_russian_summary, validate_edit_duration, validate_plan, validate_source_filename
 from .jobs import JobError, _with_increment, handoff, list_sources, source_metadata
 from .learned import LearnedDictionary
 from .manifest import write_manifest
@@ -274,7 +274,10 @@ class CutPilotService:
         else:
             raise CommandValidationError("Не удалось подготовить план")
         plan_id = secrets.token_urlsafe(24)
-        plan = replace(plan, task=normalized_task)
+        # The provider summary is advisory.  Build the visible description
+        # from the validated commands so the plan is always Russian and
+        # cannot claim an operation different from the one being queued.
+        plan = replace(plan, task=normalized_task, summary=build_russian_summary(plan.source_filename, plan.commands))
         self.store.save(plan_id, plan, selected, self.PENDING_TTL_SECONDS)
         logger.info("plan.ready plan_id=%s source=%r commands=%r staged=%r summary=%r", plan_id, plan.source_filename, plan.commands, plan.staged_filename, plan.summary)
         return {"plan_id": plan_id, "source_filename": plan.source_filename, "staged_filename": build_queue_filename(plan.source_filename, plan.commands), "commands": list(plan.commands), "summary": plan.summary}

@@ -252,6 +252,49 @@ def build_worker_output_filename(staged_filename: str) -> str:
     return f"{clean_stem}{suffix}{staged.suffix}"
 
 
+def build_russian_summary(source_filename: str, commands: tuple[str, ...]) -> str:
+    """Build the user-facing plan description from validated commands.
+
+    The provider's summary is intentionally not shown as-is: providers may
+    answer in English or describe commands incorrectly.  The command list has
+    already passed CutPilot validation, so it is the reliable source for this
+    short Russian description.
+    """
+    parts: list[str] = []
+    for command in commands:
+        if command.startswith("-crp+"):
+            ranges = command[5:].replace("+", " и ")
+            parts.append(f"склеить фрагменты {ranges}")
+        elif command.startswith("-crp="):
+            parts.append(f"оставить фрагмент {command[5:]}")
+        elif command.startswith("-crp-"):
+            ranges = command[5:].replace("+", " и ")
+            parts.append(f"вырезать фрагменты {ranges}")
+        elif command == "-mp4":
+            parts.append("пересчитать в MP4")
+        elif command == "-mov":
+            parts.append("пересчитать в MOV")
+        elif command == "-hevc":
+            parts.append("использовать кодек HEVC")
+        elif command in {"-nl"}:
+            parts.append("наложить логотип")
+        elif command == "-nologo":
+            parts.append("убрать логотип")
+        elif command == "-nc":
+            parts.append("не обрезать видео по тишине")
+        elif command.endswith("p") and command[1:-1].isdigit():
+            parts.append(f"установить разрешение {command[1:]}")
+        elif command.endswith("fps") and command[1:-3].isdigit():
+            parts.append(f"установить частоту {command[1:-3]} кадров/с")
+        elif command.endswith("mb") and command[1:-2].isdigit():
+            parts.append(f"сжать до {command[1:-2]} МБ")
+        elif command.endswith("gb") and command[1:-2].isdigit():
+            parts.append(f"сжать до {command[1:-2]} ГБ")
+    if not parts:
+        return f"Обработать файл «{source_filename}»"
+    return f"Для файла «{source_filename}»: " + ", ".join(parts) + "."
+
+
 def validate_plan(source_filename: object, raw_plan: object) -> ValidatedPlan:
     if not isinstance(raw_plan, dict):
         raise CommandValidationError("AI plan must be a JSON object")
