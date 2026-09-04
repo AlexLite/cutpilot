@@ -75,9 +75,20 @@ function setupFileTools() {
     if (!file) return;
     show(`Загружаю: ${file.name}`);
     try {
-      const response = await fetch('/api/upload', {method: 'POST', headers: {'X-Filename': encodeURIComponent(file.name)}, body: file});
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'Не удалось загрузить файл');
+      const data = await new Promise((resolve, reject) => {
+        const request = new XMLHttpRequest();
+        request.open('POST', '/api/upload');
+        request.setRequestHeader('X-Filename', encodeURIComponent(file.name));
+        request.upload.onprogress = (event) => {
+          if (event.lengthComputable) show(`Загрузка: ${Math.round(event.loaded / event.total * 100)}%`);
+        };
+        request.onload = () => {
+          try { const body = JSON.parse(request.responseText); request.status >= 200 && request.status < 300 ? resolve(body) : reject(new Error(body.error || 'Не удалось загрузить файл')); }
+          catch { reject(new Error('Некорректный ответ сервера')); }
+        };
+        request.onerror = () => reject(new Error('Сетевая ошибка'));
+        request.send(file);
+      });
       show(`Файл добавлен: ${data.filename}`);
       await loadFiles();
     } catch (error) {
@@ -183,4 +194,10 @@ confirmButton.onclick = async () => {
 
 loadFiles().catch(error => show(`Ошибка списка файлов: ${error.message}`));
 loadJobs().catch(() => {});
-setInterval(() => loadJobs().catch(() => {}), 5000);
+if (window.EventSource) {
+  const events = new EventSource('/api/jobs/stream');
+  events.onmessage = () => loadJobs().catch(() => {});
+  events.onerror = () => loadJobs().catch(() => {});
+} else {
+  setInterval(() => loadJobs().catch(() => {}), 5000);
+}

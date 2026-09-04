@@ -136,7 +136,8 @@ def handoff(directory: Path, cutpilot_directory: Path, plan: ValidatedPlan, expe
             destination = (destination_root / candidate).resolve()
             if destination.parent != destination_root:
                 raise JobError("Unsafe destination filename")
-            result = destination_root / build_worker_output_filename(candidate)
+            suffix = "_nologo" if any(command in {"-nl", "-nologo"} for command in plan.commands) else "_logo"
+            result = destination_root / f"{Path(candidate).stem}{suffix}{Path(candidate).suffix}"
             if destination.exists() or result.exists():
                 continue
             temporary = destination_root / f".cutpilot.{uuid.uuid4().hex}.part"

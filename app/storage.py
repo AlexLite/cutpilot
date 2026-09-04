@@ -114,12 +114,12 @@ class PlanStore:
 
     def create_job(self, job_id: str, plan: ValidatedPlan) -> bool:
         now = time.time()
-        from .commands import build_worker_output_filename
+        from pathlib import Path
         try:
             with closing(self._connect()) as db, db:
                 db.execute(
                     "INSERT INTO jobs (id, source, staged_filename, result_filename, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                    (job_id, plan.source_filename, plan.staged_filename, build_worker_output_filename(plan.staged_filename), "queued", now, now),
+                    (job_id, plan.source_filename, plan.staged_filename, f"{Path(plan.staged_filename).stem}{'_nologo' if any(command in {'-nl', '-nologo'} for command in plan.commands) else '_logo'}{Path(plan.staged_filename).suffix}", "queued", now, now),
                 )
         except sqlite3.IntegrityError:
             return False

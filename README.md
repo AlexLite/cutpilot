@@ -1,36 +1,36 @@
 # CutPilot
 
-CutPilot is a private, local-network web application for preparing safe video-processing jobs.
+CutPilot — закрытое веб-приложение для безопасной обработки видео в локальной сети.
 
-It lets a user choose a video from `AI_Cut`, describe the required edit in natural language, receive an AI-generated plan, review it, and only then submit an allowed FFmpeg job to CutPilot.
+Пользователь выбирает видео из `AI_Cut`, обычным языком описывает задачу, получает план от AI, проверяет его и только после подтверждения передаёт разрешённую задачу FFmpeg в обработку.
 
-## Principles
+## Основные принципы
 
-- The AI never receives shell or filesystem access.
-- The backend accepts only an allowlisted set of CutPilot commands.
-- Every job requires a human confirmation before it reaches the worker.
-- Source videos stay inside the local infrastructure; the first release sends only the user's text and file metadata to an AI provider.
+- AI не получает доступ к shell и файловой системе.
+- Сервер принимает только разрешённые команды CutPilot.
+- Каждая задача требует подтверждения пользователя перед передачей worker.
+- Видео остаётся внутри локальной инфраструктуры; провайдер получает только текст задачи и метаданные файла.
 
-## Components
+## Состав проекта
 
-- `app/` — web UI and API.
-- `app/ai.py` — server-side provider adapter, beginning with OpenRouter.
-- `app/commands.py` — parser and validator for the CutPilot command language.
-- `app/jobs.py` — confirmed-job hand-off to the CutPilot worker.
-- `deploy/` — systemd, reverse proxy, and environment examples.
-- `deploy/cutpilot-watcher` — the CutPilot folder watcher.
-- `assets/` — horizontal and vertical logo assets used by the watcher.
-- `docs/!!!ПРОЧИТАЙ.html` and `docs/!!!ПРОЧИТАЙ.txt` — the current user instructions served through the SMB share.
+- `app/` — веб-интерфейс и API.
+- `app/ai.py` — адаптер провайдера, в первую очередь OpenRouter.
+- `app/commands.py` — parser и validator языка команд CutPilot.
+- `app/jobs.py` — передача подтверждённых задач worker CutPilot.
+- `deploy/` — примеры systemd, reverse proxy и окружения.
+- `deploy/cutpilot-watcher` — наблюдатель за папкой CutPilot.
+- `assets/` — горизонтальный и вертикальный логотипы для worker.
+- `docs/` — пользовательская и техническая документация.
 
-## First release (implemented locally)
+## Что уже работает
 
-1. Browse video files in `AI_Cut`.
-2. Describe the desired conversion, logo operation, or timecode edit.
-3. Generate a typed command plan.
-4. Review and confirm the final filename and commands.
-5. Submit a copy of the file atomically to the CutPilot worker. The original remains in `AI_Cut`.
+1. Просмотр видео из `AI_Cut`.
+2. Описание конвертации, логотипа, mute и таймкодов обычными словами.
+3. Формирование проверенного плана команд.
+4. Проверка и подтверждение имени файла и действий.
+5. Атомарная передача копии файла worker CutPilot. Исходник остаётся в `AI_Cut`.
 
-Run locally from the repository:
+## Локальный запуск
 
 ```text
 set CUTPILOT_AI_CUT_DIRECTORY=C:\path\to\cutpilot\AI_Cut
@@ -40,19 +40,19 @@ set OPENROUTER_MODEL=...
 python -m app.server
 ```
 
-Open `http://127.0.0.1:8787`. The service binds to localhost by default. `deploy/cutpilot.service` is a systemd template for an LXC; it is intentionally not a deployment script. On LXC, copy `.env.example` to `/etc/cutpilot/cutpilot.env`, fill the key outside Git, set ownership to `root:root`, and mode `0600` before starting the service.
+Откройте `http://127.0.0.1:8787`. По умолчанию сервис слушает только localhost. Файл `deploy/cutpilot.service` — шаблон systemd для LXC, а не автоматический установщик. В LXC скопируйте `.env.example` в `/etc/cutpilot/cutpilot.env`, внесите ключ вне Git, установите владельца `root:root` и права `0600`.
 
-Run the local container with Docker Compose:
+## Запуск через Docker Compose
 
 ```text
 copy .env.example .env
 docker compose up --build
 ```
 
-Put configuration only in the untracked `.env`. Compose mounts `./data/cutpilot` to `/srv/cutpilot` and a separate `./data/cutpilot-state` directory to `/var/lib/cutpilot` for SQLite, progress, and the learned dictionary. This keeps runtime state out of the shared media folder. The service is published on `CUTPILOT_BIND_ADDRESS:8787` (localhost by default). The container has outbound access to the configured OpenRouter endpoint. For LAN access, set the bind address to the intended LAN interface and block WAN inbound access in the router/firewall; that network policy is deliberately outside this repository. The container contains the CutPilot API only, while the watcher remains a separate service and must see the same host directory for a real hand-off.
+Настройки должны находиться только в неотслеживаемом `.env`. Compose подключает `./data/cutpilot` к `/srv/cutpilot`, а отдельную папку `./data/cutpilot-state` — к `/var/lib/cutpilot` для SQLite, прогресса и обучаемого словаря. Это не смешивает служебные данные с общей папкой видео. Сервис публикуется на `CUTPILOT_BIND_ADDRESS:8787` (по умолчанию только localhost). Контейнер может обращаться к настроенному адресу OpenRouter. Для доступа из LAN укажите нужный LAN-интерфейс и запретите входящие подключения из WAN на роутере или firewall. Worker остаётся отдельным сервисом и должен видеть ту же папку на хосте.
 
-The API is deliberately small: `GET /api/files`, `POST /api/upload`, `POST /api/plan`, and `POST /api/jobs`. Plans are stored in SQLite for up to 30 minutes and can be consumed once only after `confirmed: true`. Uploads accept only direct-child video filenames, are size-limited, written to a unique temporary file, fsynced, and published without overwriting an existing file. No endpoint accepts shell, FFmpeg commands, or arbitrary paths.
+## API и безопасность
 
-## Security
+API намеренно небольшой: `GET /api/files`, `POST /api/upload`, `POST /api/plan` и `POST /api/jobs`. Планы хранятся в SQLite до 30 минут и могут быть использованы только один раз после `confirmed: true`. Загрузка ограничена видеофайлами в корень `AI_Cut`, записывается во временный файл и публикуется без перезаписи существующего файла. API не принимает shell, команды FFmpeg или произвольные пути.
 
-No API keys are committed. Configuration is stored only in a root-readable environment file on the LXC.
+Ключи API не коммитятся. На LXC настройки хранятся только в файле окружения, доступном root.

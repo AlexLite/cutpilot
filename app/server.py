@@ -20,9 +20,10 @@ from typing import Any
 from urllib.parse import unquote
 
 from .ai import AIProviderError, OpenRouterAdapter
-from .commands import CommandValidationError, ValidatedPlan, build_worker_output_filename, validate_edit_duration, validate_plan, validate_source_filename
-from .jobs import JobError, _with_increment, handoff, list_sources, source_metadata, with_no_auto_tail
+from .commands import CommandValidationError, ValidatedPlan, build_queue_filename, build_russian_summary, validate_edit_duration, validate_plan, validate_source_filename
+from .jobs import JobError, _with_increment, handoff, list_sources, source_metadata
 from .learned import LearnedDictionary
+from .manifest import write_manifest
 from .media import probe_media
 from .rules import simple_plan
 from .storage import PlanStore
@@ -56,15 +57,20 @@ def _correct_logo_intent(raw: Any, task: str) -> Any:
     if not isinstance(raw, dict) or not isinstance(raw.get("commands"), list):
         return raw
     lowered = task.casefold()
-    positive = bool(re.search(r"(?:с|c|добавь|добавить|оставь|оставить|наложи|наложить|нанеси|поставь|keep|with)\s*(?:лого|логотип|logo)", lowered))
+    overlay = bool(re.search(r"(?:добавь|добавить|наложи|наложить|нанеси|нанести|поставь|поставить|приклей|приклеить)\s+(?:лого|логотип|logo)", lowered))
+    positive = bool(re.search(r"(?:с|c|оставь|оставить|keep|with)\s*(?:лого|логотип|logo)", lowered))
     negative = bool(re.search(r"(?:без|убери|убрать|удали|удалить|remove)\s*(?:лого|логотип)", lowered))
-    if positive and not negative:
+    if overlay and not negative:
+        commands = [command for command in raw["commands"] if command != "-nologo"]
+        if "-nl" not in commands:
+            commands.append("-nl")
+    elif positive and not negative:
         commands = [command for command in raw["commands"] if command not in {"-nl", "-nologo"}]
     else:
         commands = [command for command in raw["commands"] if command != "-nl"]
         if "-nologo" not in commands:
             commands.append("-nologo")
-    if len(commands) != len(raw["commands"]):
+    if commands != raw["commands"]:
         corrected = dict(raw)
         corrected["commands"] = commands
         logger.warning("Corrected logo intent: task=%r raw=%r corrected=%r", task, raw, corrected)
@@ -108,6 +114,12 @@ class CutPilotService:
         self.store = PlanStore(db_path)
         dictionary_path = Path(os.environ.get("CUTPILOT_DICTIONARY_PATH", "/var/lib/cutpilot/learned_dictionary.json"))
         self.learned = LearnedDictionary(dictionary_path)
+        # Keep manifests outside the shared media directory by default. The
+        # LXC unit supplies /var/lib/cutpilot/jobs explicitly; deriving a
+        # sibling directory here keeps local tests and developer runs
+        # self-contained and writable.
+        default_manifest_directory = self.cutpilot_directory.parent / f".{self.cutpilot_directory.name}-jobs"
+        self.manifest_directory = Path(os.environ.get("CUTPILOT_JOB_MANIFEST_DIR", str(default_manifest_directory)))
 
     def files(self) -> list[dict[str, Any]]:
         return [
@@ -272,10 +284,13 @@ class CutPilotService:
         else:
             raise CommandValidationError("Не удалось подготовить план")
         plan_id = secrets.token_urlsafe(24)
-        plan = replace(plan, task=normalized_task)
+        # The provider summary is advisory.  Build the visible description
+        # from the validated commands so the plan is always Russian and
+        # cannot claim an operation different from the one being queued.
+        plan = replace(plan, task=normalized_task, summary=build_russian_summary(plan.source_filename, plan.commands))
         self.store.save(plan_id, plan, selected, self.PENDING_TTL_SECONDS)
         logger.info("plan.ready plan_id=%s source=%r commands=%r staged=%r summary=%r", plan_id, plan.source_filename, plan.commands, plan.staged_filename, plan.summary)
-        return {"plan_id": plan_id, "source_filename": plan.source_filename, "staged_filename": plan.staged_filename, "commands": list(plan.commands), "summary": plan.summary}
+        return {"plan_id": plan_id, "source_filename": plan.source_filename, "staged_filename": build_queue_filename(plan.source_filename, plan.commands), "commands": list(plan.commands), "summary": plan.summary}
 
     def confirm(self, plan_id: str, confirmed: bool) -> dict[str, str]:
         logger.info("job.confirm plan_id=%r confirmed=%r", plan_id, confirmed)
@@ -294,21 +309,28 @@ class CutPilotService:
             self.cutpilot_directory.mkdir(parents=True, exist_ok=True)
             reserved = False
             for number in range(1000):
-                candidate = plan.staged_filename if number == 0 else _with_increment(plan.staged_filename, number)
-                result = self.cutpilot_directory / build_worker_output_filename(candidate)
+                candidate = build_queue_filename(plan.source_filename, plan.commands)
+                if number:
+                    candidate = _with_increment(candidate, number)
+                suffix = "_nologo" if any(command in {"-nl", "-nologo"} for command in plan.commands) else "_logo"
+                result = self.cutpilot_directory / f"{Path(candidate).stem}{suffix}{Path(candidate).suffix}"
                 if (self.cutpilot_directory / candidate).exists() or result.exists():
                     continue
-                candidate_plan = replace(plan, staged_filename=with_no_auto_tail(candidate))
+                candidate_plan = replace(plan, staged_filename=candidate)
                 if self.store.create_job(plan_id, candidate_plan):
                     plan = candidate_plan
                     reserved = True
                     break
             if not reserved:
                 raise JobError("Could not reserve a free result filename")
+            manifest = None
             try:
+                manifest = write_manifest(self.manifest_directory, plan_id, plan.staged_filename, plan.commands + ("-nocut",))
                 name = handoff(self.ai_cut_directory, self.cutpilot_directory, plan, selected, allow_increment=False)
             except (JobError, OSError) as exc:
                 self.store.update_job(plan_id, "failed", str(exc))
+                if manifest is not None:
+                    manifest.unlink(missing_ok=True)
                 logger.exception("job.handoff_failed plan_id=%s source=%r", plan_id, plan.source_filename)
                 raise
             self.store.update_job(plan_id, "queued", name)
@@ -357,6 +379,24 @@ def make_handler(service: CutPilotService):
                     _json_response(self, HTTPStatus.OK, {"jobs": service.jobs()})
                 except OSError:
                     _json_response(self, HTTPStatus.INTERNAL_SERVER_ERROR, {"error": "Queue is not available"})
+                return
+            if self.path == "/api/jobs/stream":
+                self.send_response(HTTPStatus.OK)
+                self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+                self.send_header("Cache-Control", "no-cache")
+                self.send_header("X-Accel-Buffering", "no")
+                self.end_headers()
+                previous = None
+                try:
+                    for _ in range(30):
+                        payload = json.dumps({"jobs": service.jobs()}, ensure_ascii=False, separators=(",", ":"))
+                        if payload != previous:
+                            self.wfile.write(f"data: {payload}\n\n".encode("utf-8"))
+                            self.wfile.flush()
+                            previous = payload
+                        time.sleep(2)
+                except (BrokenPipeError, ConnectionResetError, OSError):
+                    pass
                 return
             if self.path in {"/", "/index.html"}:
                 body = (Path(__file__).parent / "static" / "index.html").read_bytes()

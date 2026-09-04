@@ -30,6 +30,8 @@ class AIAdapterTests(unittest.TestCase):
         system = payload["messages"][0]["content"]
         self.assertIn("Never return placeholders", system)
         self.assertIn("сожми до 100 Мб", system)
+        self.assertIn("never invent a format", system)
+        self.assertIn("entirely in Russian", system)
 
     def test_repair_feedback_is_sent_only_on_retry(self):
         adapter = OpenRouterAdapter(api_key="test", model="test", endpoint="http://127.0.0.1/test")

@@ -122,6 +122,8 @@ def validate_commands(commands: object) -> tuple[str, ...]:
 
     seen: set[str] = set()
     container: str | None = None
+    resolution: str | None = None
+    fps_value: str | None = None
     edit_seen = False
 
     for command in commands:
@@ -136,15 +138,20 @@ def validate_commands(commands: object) -> tuple[str, ...]:
                 raise CommandValidationError("Only one edit command is allowed")
             _validate_edit(command)
             edit_seen = True
-        elif command in {"-nl", "-nologo", "-nc", "-nocut", "-hevc"}:
+        elif command in {"-nl", "-nologo", "-nc", "-nocut", "-mute", "-hevc"}:
             pass
         elif command in {"-mp4", "-mov"}:
             if container is not None:
                 raise CommandValidationError("Only one output container is allowed")
             container = command[1:]
         elif re.fullmatch(r"-(?:1080|720|480|360)p", command):
-            pass
+            if resolution is not None:
+                raise CommandValidationError("Only one output resolution is allowed")
+            resolution = command
         elif re.fullmatch(r"-[1-9][0-9]?fps", command):
+            if fps_value is not None:
+                raise CommandValidationError("Only one output frame rate is allowed")
+            fps_value = command
             fps = int(command[1:-3])
             if not 1 <= fps <= 60:
                 raise CommandValidationError("FPS must be between 1 and 60")
@@ -222,6 +229,19 @@ def build_staged_filename(source_filename: str, commands: tuple[str, ...]) -> st
     return result
 
 
+def build_queue_filename(source_filename: str, commands: tuple[str, ...]) -> str:
+    """Clean queue name used by structured jobs; commands live in a manifest."""
+    source = Path(source_filename)
+    extension = source.suffix.lower().lstrip(".")
+    if "-mp4" in commands:
+        extension = "mp4"
+    elif "-mov" in commands:
+        extension = "mov"
+    elif "-hevc" in commands:
+        extension = "mp4"
+    return f"{source.stem}.{extension}"
+
+
 def build_worker_output_filename(staged_filename: str) -> str:
     """Build the final name that the CutPilot watcher will create."""
 
@@ -237,6 +257,51 @@ def build_worker_output_filename(staged_filename: str) -> str:
         no_logo = False
     suffix = "_nologo" if no_logo else "_logo"
     return f"{clean_stem}{suffix}{staged.suffix}"
+
+
+def build_russian_summary(source_filename: str, commands: tuple[str, ...]) -> str:
+    """Build the user-facing plan description from validated commands.
+
+    The provider's summary is intentionally not shown as-is: providers may
+    answer in English or describe commands incorrectly.  The command list has
+    already passed CutPilot validation, so it is the reliable source for this
+    short Russian description.
+    """
+    parts: list[str] = []
+    for command in commands:
+        if command.startswith("-crp+"):
+            ranges = command[5:].replace("+", " и ")
+            parts.append(f"склеить фрагменты {ranges}")
+        elif command.startswith("-crp="):
+            parts.append(f"оставить фрагмент {command[5:]}")
+        elif command.startswith("-crp-"):
+            ranges = command[5:].replace("+", " и ")
+            parts.append(f"вырезать фрагменты {ranges}")
+        elif command == "-mp4":
+            parts.append("пересчитать в MP4")
+        elif command == "-mov":
+            parts.append("пересчитать в MOV")
+        elif command == "-hevc":
+            parts.append("использовать кодек HEVC")
+        elif command in {"-nl"}:
+            parts.append("наложить логотип")
+        elif command == "-nologo":
+            parts.append("убрать логотип")
+        elif command == "-nc":
+            parts.append("не обрезать видео по тишине")
+        elif command == "-mute":
+            parts.append("убрать весь звук")
+        elif command.endswith("p") and command[1:-1].isdigit():
+            parts.append(f"установить разрешение {command[1:]}")
+        elif command.endswith("fps") and command[1:-3].isdigit():
+            parts.append(f"установить частоту {command[1:-3]} кадров/с")
+        elif command.endswith("mb") and command[1:-2].isdigit():
+            parts.append(f"сжать до {command[1:-2]} МБ")
+        elif command.endswith("gb") and command[1:-2].isdigit():
+            parts.append(f"сжать до {command[1:-2]} ГБ")
+    if not parts:
+        return f"Обработать файл «{source_filename}»"
+    return f"Для файла «{source_filename}»: " + ", ".join(parts) + "."
 
 
 def validate_plan(source_filename: object, raw_plan: object) -> ValidatedPlan:

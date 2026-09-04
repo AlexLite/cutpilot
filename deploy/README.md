@@ -1,33 +1,14 @@
-# LXC deployment checklist
+# Чек-лист развёртывания в LXC
 
-This is a checklist, not an unattended installer. Do not deploy until the
-the `cutpilot-watcher.service`, its `/srv/cutpilot` path, and the
-permissions of the intended service account have been checked on the target
-LXC.
+Это чек-лист, а не автоматический установщик. Перед развёртыванием проверьте `cutpilot-watcher.service`, путь `/srv/cutpilot` и права выбранной учётной записи на целевом LXC.
 
-1. Install Python 3 from the LXC distribution packages. No third-party Python
-   packages are required for the first release.
-2. Copy the repository to `/opt/cutpilot` and verify that `python3 -m app.server`
-   imports successfully from that directory.
-3. Create an unprivileged `cutpilot` user. Grant it read access to
-   `/srv/cutpilot/AI_Cut` and write access to `/srv/cutpilot` (the exact group
-   depends on the existing worker; verify this rather than broadening access).
-4. Create `/etc/cutpilot/cutpilot.env` from `.env.example`. Put the provider key
-   in this file only after the user explicitly supplies/authorizes it; never put
-   it in Git, the unit file, or command arguments. Set `root:root` ownership and
-   mode `0600`.
-5. Install `cutpilot-probe.py` as `/usr/local/libexec/cutpilot-probe` (mode `0755`), then
-   install `cutpilot-watcher.service` and `cutpilot.service` to `/etc/systemd/system/`, run
-   `systemctl daemon-reload`, and enable/start it only after the above checks.
-6. Keep `CUTPILOT_HOST=127.0.0.1` unless a separately reviewed reverse proxy is
-   configured. Verify `GET /api/files`, a fake-provider/local smoke test, and a
-   real confirmed hand-off while watching the CutPilot worker.
+1. Установите Python 3 из пакетов дистрибутива LXC. Для первой версии сторонние Python-пакеты не нужны.
+2. Скопируйте репозиторий в `/opt/cutpilot` и проверьте, что из этой папки выполняется `python3 -m app.server`.
+3. Создайте непривилегированного пользователя `cutpilot`. Дайте ему доступ на чтение к `/srv/cutpilot/AI_Cut` и запись в `/srv/cutpilot`. Точную группу проверьте по существующему worker, не расширяйте права без необходимости.
+4. Создайте `/etc/cutpilot/cutpilot.env` на основе `.env.example`. Ключ провайдера храните только в этом файле, вне Git, unit-файлов и аргументов команд. Установите владельца `root:root` и права `0600`.
+5. Установите `cutpilot-probe.py` как `/usr/local/libexec/cutpilot-probe` с правами `0755`. Затем установите `cutpilot-watcher.service` и `cutpilot.service` в `/etc/systemd/system/`, выполните `systemctl daemon-reload` и только после проверок включите и запустите сервисы.
+6. Оставляйте `CUTPILOT_HOST=127.0.0.1`, если отдельно не настроен reverse proxy. Проверьте `GET /api/files`, локальный тест с fake provider и одну реальную подтверждённую передачу, наблюдая за worker CutPilot.
 
-The first release sends only the selected basename, byte size, and user task to
-the configured provider. It does not upload video bytes and does not expose a
-shell or FFmpeg endpoint.
+Первая версия отправляет провайдеру только имя файла, его размер и текст задачи. Байты видео не загружаются, shell и FFmpeg API наружу не предоставляются.
 
-Automatic removal of a silent tail is enabled for files dropped directly into
-the watcher queue. Plans handed off by the API from `AI_Cut` are marked with
-`-nocut`, so their tail is never removed implicitly. Set
-`CUTPILOT_AUTO_TAIL_CUT=0` to disable the behavior for direct queue drops too.
+Автоматическое удаление тихого хвоста включено для файлов, которые напрямую положили в очередь watcher. Задачи, переданные API из `AI_Cut`, получают `-nocut`, поэтому их хвост автоматически не обрезается. Чтобы отключить поведение и для прямых файлов очереди, установите `CUTPILOT_AUTO_TAIL_CUT=0`.

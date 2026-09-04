@@ -14,6 +14,10 @@ class RulePlanTests(unittest.TestCase):
         plan = simple_plan("склей 0.15-0.50+1.25-2.13 и оставь лого")
         self.assertEqual(plan["commands"], ["-crp+0.15-0.50+1.25-2.13"])
 
+    def test_collect_ranges_means_concatenate(self):
+        plan = simple_plan("собери 0.16-0.25+1.20-1.25 пересчитай в mov и наложи лого")
+        self.assertEqual(plan["commands"], ["-mov", "-nl", "-crp+0.16-0.25+1.20-1.25"])
+
     def test_complex_request_falls_back_to_ai(self):
         self.assertIsNone(simple_plan("сделай как для телеграма, но сохрани качество"))
 
@@ -40,6 +44,14 @@ class RulePlanTests(unittest.TestCase):
 
     def test_latin_c_before_logo_means_keep_logo(self):
         self.assertEqual(simple_plan("перекодируй в mov c лого")["commands"], ["-mov"])
+
+    def test_overlay_logo_synonyms_are_explicit(self):
+        for task in ("добавь лого", "приклей лого"):
+            self.assertEqual(simple_plan(task)["commands"], ["-nl"], task)
+
+    def test_mute_aliases_disable_audio(self):
+        for task in ("убить звук", "замьютить", "убрать звук", "сделать тишину", "мьют", "mute"):
+            self.assertEqual(simple_plan(task)["commands"], ["-mute"], task)
 
 
 if __name__ == "__main__":

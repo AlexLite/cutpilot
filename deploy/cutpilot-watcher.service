@@ -11,7 +11,10 @@ RuntimeDirectoryMode=0770
 Environment=CUTPILOT_LOGO_H=/srv/logo/logo.png
 Environment=CUTPILOT_LOGO_V=/srv/logo/logo_v.png
 Environment=CUTPILOT_LOG_FILE=/var/lib/cutpilot/watcher.log
+Environment=HOME=/var/lib/cutpilot
+Environment=XDG_CACHE_HOME=/var/lib/cutpilot/cache
 Environment=CUTPILOT_PROGRESS_DIR=/var/lib/cutpilot/progress
+Environment=CUTPILOT_JOB_MANIFEST_DIR=/var/lib/cutpilot/jobs
 Environment=CUTPILOT_WORKER_MODE=nvenc
 Environment=CUTPILOT_AUTO_TAIL_CUT=1
 ExecStart=/usr/local/sbin/cutpilot-watcher

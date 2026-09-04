@@ -20,6 +20,10 @@ class LogoIntentTests(unittest.TestCase):
         raw = {"commands": ["-nl"], "summary": "overlay"}
         self.assertEqual(_correct_logo_intent(raw, "перекодируй в mov c лого")["commands"], [])
 
+    def test_overlay_logo_request_keeps_overlay_command(self):
+        raw = {"commands": ["-nologo"], "summary": "overlay"}
+        self.assertEqual(_correct_logo_intent(raw, "приклей лого")["commands"], ["-nl"])
+
     def test_negative_logo_request_is_not_changed(self):
         raw = {"commands": ["-nologo"], "summary": "remove"}
         self.assertEqual(_correct_logo_intent(raw, "убери логотип")["commands"], ["-nologo"])
