@@ -111,6 +111,7 @@ class CutPilotService:
         self.ai = ai or OpenRouterAdapter()
         self.ai_cut_directory = Path(ai_cut_directory or os.environ.get("CUTPILOT_AI_CUT_DIRECTORY", "/srv/cutpilot/AI_Cut"))
         self.cutpilot_directory = Path(cutpilot_directory or os.environ.get("CUTPILOT_DIRECTORY", "/srv/cutpilot"))
+        self.queue_directory = Path(os.environ.get("CUTPILOT_API_QUEUE_DIR", "/var/lib/cutpilot/queue"))
         db_path = Path(os.environ.get("CUTPILOT_DB_PATH", str(self.cutpilot_directory / "cutpilot.db")))
         self.store = PlanStore(db_path)
         dictionary_path = Path(os.environ.get("CUTPILOT_DICTIONARY_PATH", "/var/lib/cutpilot/learned_dictionary.json"))
@@ -308,6 +309,7 @@ class CutPilotService:
                 raise JobError("Plan is missing or has already been used")
             plan, selected = item
             self.cutpilot_directory.mkdir(parents=True, exist_ok=True)
+            self.queue_directory.mkdir(parents=True, exist_ok=True)
             reserved = False
             for number in range(1000):
                 candidate = build_queue_filename(plan.source_filename, plan.commands)
@@ -327,7 +329,14 @@ class CutPilotService:
             manifest = None
             try:
                 manifest = write_manifest(self.manifest_directory, plan_id, plan.staged_filename, plan.commands + ("-nocut",))
-                name = handoff(self.ai_cut_directory, self.cutpilot_directory, plan, selected, allow_increment=False)
+                name = handoff(
+                    self.ai_cut_directory,
+                    self.queue_directory,
+                    plan,
+                    selected,
+                    allow_increment=False,
+                    output_directory=self.cutpilot_directory,
+                )
             except (JobError, OSError) as exc:
                 self.store.update_job(plan_id, "failed", str(exc))
                 if manifest is not None:

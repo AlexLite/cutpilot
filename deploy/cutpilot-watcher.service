@@ -16,6 +16,7 @@ Environment=XDG_CACHE_HOME=/var/lib/cutpilot/cache
 Environment=CUDA_CACHE_PATH=/var/lib/cutpilot/cache/nv
 Environment=CUTPILOT_PROGRESS_DIR=/var/lib/cutpilot/progress
 Environment=CUTPILOT_JOB_MANIFEST_DIR=/var/lib/cutpilot/jobs
+Environment=CUTPILOT_API_QUEUE_DIR=/var/lib/cutpilot/queue
 Environment=CUTPILOT_WORKER_MODE=nvenc
 Environment=CUTPILOT_AUTO_TAIL_CUT=1
 ExecStart=/usr/local/sbin/cutpilot-watcher
@@ -28,7 +29,7 @@ ProtectKernelTunables=true
 ProtectKernelModules=true
 ProtectControlGroups=true
 RestrictSUIDSGID=true
-ReadWritePaths=/srv/cutpilot /var/lib/cutpilot /run/cutpilot
+ReadWritePaths=/srv/cutpilot /var/lib/cutpilot /var/lib/cutpilot/queue /run/cutpilot
 RestrictAddressFamilies=AF_UNIX
 
 [Install]

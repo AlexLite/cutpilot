@@ -4,6 +4,7 @@ set -u
 shopt -s nocasematch
 
 WATCH_DIR=${CUTPILOT_WATCH_DIR:-/srv/cutpilot}
+API_QUEUE_DIR=${CUTPILOT_API_QUEUE_DIR:-/var/lib/cutpilot/queue}
 LOGO_H=${CUTPILOT_LOGO_H:-/srv/logo/logo.png}
 LOGO_V=${CUTPILOT_LOGO_V:-/srv/logo/logo_v.png}
 LOG_FILE=${CUTPILOT_LOG_FILE:-/var/log/cutpilot-watcher.log}
@@ -18,7 +19,7 @@ STABLE_DELAY=${CUTPILOT_STABLE_DELAY:-10}
 WORKER_MODE=${CUTPILOT_WORKER_MODE:-nvenc}
 AUTO_TAIL_CUT=${CUTPILOT_AUTO_TAIL_CUT:-1}
 
-mkdir -p "$WATCH_DIR" "$RUN_DIR" "$STABLE_DIR" "$LOCK_DIR" "$PROGRESS_DIR"
+mkdir -p "$WATCH_DIR" "$API_QUEUE_DIR" "$RUN_DIR" "$STABLE_DIR" "$LOCK_DIR" "$PROGRESS_DIR"
 # Locks are empty directories. A service restart can interrupt a worker before its
 # RETURN trap runs, so clear locks inherited from a previous watcher instance.
 find "$LOCK_DIR" -mindepth 1 -maxdepth 1 -type d -empty -exec rmdir {} + 2>/dev/null || true
@@ -451,7 +452,7 @@ worker(){
   local mode=$1 f
   while :; do
     cleanup_progress
-    while IFS= read -r -d '' f; do processable_file "$f" && stable_enough "$f" && process_file "$f" "$mode" || true; done < <(find "$WATCH_DIR" -maxdepth 1 -type f -print0)
+    while IFS= read -r -d '' f; do processable_file "$f" && stable_enough "$f" && process_file "$f" "$mode" || true; done < <(find "$WATCH_DIR" "$API_QUEUE_DIR" -maxdepth 1 -type f -print0)
     sleep 3
   done
 }

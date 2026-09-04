@@ -12,6 +12,7 @@ EnvironmentFile=/etc/cutpilot/cutpilot.env
 Environment=CUTPILOT_DB_PATH=/var/lib/cutpilot/cutpilot.db
 Environment=CUTPILOT_PROGRESS_DIR=/var/lib/cutpilot/progress
 Environment=CUTPILOT_JOB_MANIFEST_DIR=/var/lib/cutpilot/jobs
+Environment=CUTPILOT_API_QUEUE_DIR=/var/lib/cutpilot/queue
 ExecStart=/usr/bin/python3 -m app.server
 Restart=on-failure
 RestartSec=5
@@ -21,7 +22,7 @@ PrivateTmp=true
 PrivateDevices=true
 ProtectHome=true
 ProtectSystem=strict
-ReadWritePaths=/srv/cutpilot /srv/cutpilot/AI_Cut /var/lib/cutpilot
+ReadWritePaths=/srv/cutpilot /srv/cutpilot/AI_Cut /var/lib/cutpilot /var/lib/cutpilot/queue
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
 
 [Install]

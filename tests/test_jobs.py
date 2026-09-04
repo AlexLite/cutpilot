@@ -42,6 +42,28 @@ class JobTests(unittest.TestCase):
             self.assertEqual(source.read_bytes(), b"video bytes")
             self.assertEqual((cutpilot / handed).read_bytes(), b"video bytes")
 
+    def test_handoff_can_keep_api_queue_outside_shared_output(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            ai_cut = root / "AI_Cut"
+            queue = root / "internal-queue"
+            output = root / "shared"
+            ai_cut.mkdir()
+            source = ai_cut / "sample.mp4"
+            source.write_bytes(b"video bytes")
+            plan = validate_plan("sample.mp4", {"commands": ["-nologo"], "summary": ""})
+            handed = handoff(
+                ai_cut,
+                queue,
+                plan,
+                source_metadata(ai_cut, "sample.mp4"),
+                output_directory=output,
+            )
+            self.assertEqual(handed, "sample [cmd -nologo].mp4")
+            self.assertTrue((queue / handed).is_file())
+            self.assertFalse((output / handed).exists())
+            self.assertTrue(source.is_file())
+
     def test_changed_source_is_not_handed_off(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

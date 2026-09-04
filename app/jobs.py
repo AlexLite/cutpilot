@@ -115,7 +115,15 @@ def source_metadata(directory: Path, filename: str) -> SourceFile:
     return SourceFile(path.name, stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns, _fingerprint(path))
 
 
-def handoff(directory: Path, cutpilot_directory: Path, plan: ValidatedPlan, expected: SourceFile, *, allow_increment: bool = True) -> str:
+def handoff(
+    directory: Path,
+    cutpilot_directory: Path,
+    plan: ValidatedPlan,
+    expected: SourceFile,
+    *,
+    allow_increment: bool = True,
+    output_directory: Path | None = None,
+) -> str:
     source = _direct_file(directory, plan.source_filename)
     current = source.stat()
     if (
@@ -127,7 +135,9 @@ def handoff(directory: Path, cutpilot_directory: Path, plan: ValidatedPlan, expe
         raise JobError("Source changed after planning; generate a new plan")
 
     destination_root = cutpilot_directory.resolve()
+    result_root = (output_directory or cutpilot_directory).resolve()
     destination_root.mkdir(parents=True, exist_ok=True)
+    result_root.mkdir(parents=True, exist_ok=True)
     with _HANDOFF_LOCK:
         for number in range(1000):
             if number and not allow_increment:
@@ -137,7 +147,7 @@ def handoff(directory: Path, cutpilot_directory: Path, plan: ValidatedPlan, expe
             if destination.parent != destination_root:
                 raise JobError("Unsafe destination filename")
             suffix = "_nologo" if any(command in {"-nl", "-nologo"} for command in plan.commands) else "_logo"
-            result = destination_root / f"{Path(candidate).stem}{suffix}{Path(candidate).suffix}"
+            result = result_root / f"{Path(candidate).stem}{suffix}{Path(candidate).suffix}"
             if destination.exists() or result.exists():
                 continue
             temporary = destination_root / f".cutpilot.{uuid.uuid4().hex}.part"
