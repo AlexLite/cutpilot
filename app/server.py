@@ -114,7 +114,12 @@ class CutPilotService:
         self.store = PlanStore(db_path)
         dictionary_path = Path(os.environ.get("CUTPILOT_DICTIONARY_PATH", "/var/lib/cutpilot/learned_dictionary.json"))
         self.learned = LearnedDictionary(dictionary_path)
-        self.manifest_directory = Path(os.environ.get("CUTPILOT_JOB_MANIFEST_DIR", "/var/lib/cutpilot/jobs"))
+        # Keep manifests outside the shared media directory by default. The
+        # LXC unit supplies /var/lib/cutpilot/jobs explicitly; deriving a
+        # sibling directory here keeps local tests and developer runs
+        # self-contained and writable.
+        default_manifest_directory = self.cutpilot_directory.parent / f".{self.cutpilot_directory.name}-jobs"
+        self.manifest_directory = Path(os.environ.get("CUTPILOT_JOB_MANIFEST_DIR", str(default_manifest_directory)))
 
     def files(self) -> list[dict[str, Any]]:
         return [
