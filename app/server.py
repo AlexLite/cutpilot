@@ -107,11 +107,18 @@ class CutPilotService:
     PENDING_TTL_SECONDS = 30 * 60
     MAX_UPLOAD_BYTES = 200 * 1024 * 1024 * 1024
 
-    def __init__(self, ai: Any | None = None, ai_cut_directory: Path | None = None, cutpilot_directory: Path | None = None):
+    def __init__(
+        self,
+        ai: Any | None = None,
+        ai_cut_directory: Path | None = None,
+        cutpilot_directory: Path | None = None,
+        queue_directory: Path | None = None,
+    ):
         self.ai = ai or OpenRouterAdapter()
         self.ai_cut_directory = Path(ai_cut_directory or os.environ.get("CUTPILOT_AI_CUT_DIRECTORY", "/srv/cutpilot/AI_Cut"))
         self.cutpilot_directory = Path(cutpilot_directory or os.environ.get("CUTPILOT_DIRECTORY", "/srv/cutpilot"))
-        self.queue_directory = Path(os.environ.get("CUTPILOT_API_QUEUE_DIR", "/var/lib/cutpilot/queue"))
+        default_queue_directory = self.cutpilot_directory.parent / f".{self.cutpilot_directory.name}-queue"
+        self.queue_directory = Path(queue_directory or os.environ.get("CUTPILOT_API_QUEUE_DIR", str(default_queue_directory)))
         db_path = Path(os.environ.get("CUTPILOT_DB_PATH", str(self.cutpilot_directory / "cutpilot.db")))
         self.store = PlanStore(db_path)
         dictionary_path = Path(os.environ.get("CUTPILOT_DICTIONARY_PATH", "/var/lib/cutpilot/learned_dictionary.json"))
