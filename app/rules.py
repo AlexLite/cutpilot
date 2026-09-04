@@ -71,7 +71,7 @@ def simple_plan(task: str, duration_seconds: float | str | None = None) -> dict[
         commands.append("-nologo")
         consumed = re.sub(r"(?:без|убер(?:и|ать)|удал(?:и|ить)|remove)\s+(?:логотип\w*|лого)", " ", consumed)
     elif overlay_logo:
-        commands.append("-nl")
+        commands.append("-logo")
         consumed = re.sub(r"(?:добав(?:ь|ить)|наложи|наложить|нанеси|нанести|поставь|поставить|приклей|приклеить)\s+(?:логотип\w*|лого|logo)", " ", consumed)
     elif positive_logo:
         consumed = re.sub(r"(?:с|остав(?:ь|ить)|with)\s+(?:логотип\w*|лого|logo)", " ", consumed)

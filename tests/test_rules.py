@@ -16,7 +16,7 @@ class RulePlanTests(unittest.TestCase):
 
     def test_collect_ranges_means_concatenate(self):
         plan = simple_plan("собери 0.16-0.25+1.20-1.25 пересчитай в mov и наложи лого")
-        self.assertEqual(plan["commands"], ["-mov", "-nl", "-crp+0.16-0.25+1.20-1.25"])
+        self.assertEqual(plan["commands"], ["-mov", "-logo", "-crp+0.16-0.25+1.20-1.25"])
 
     def test_complex_request_falls_back_to_ai(self):
         self.assertIsNone(simple_plan("сделай как для телеграма, но сохрани качество"))
@@ -31,7 +31,7 @@ class RulePlanTests(unittest.TestCase):
 
     def test_trim_by_timecode_is_local_and_keeps_explicit_logo(self):
         plan = simple_plan("Обрезать по таймкоду 1.25-1.55 и наложить лого")
-        self.assertEqual(plan["commands"], ["-nl", "-crp-1.25-1.55"])
+        self.assertEqual(plan["commands"], ["-logo", "-crp-1.25-1.55"])
 
     def test_russian_file_size_unit_is_normalized(self):
         self.assertEqual(simple_plan("сожми до 100 Мегабайт")["commands"], ["-100mb"])
@@ -47,7 +47,7 @@ class RulePlanTests(unittest.TestCase):
 
     def test_overlay_logo_synonyms_are_explicit(self):
         for task in ("добавь лого", "приклей лого"):
-            self.assertEqual(simple_plan(task)["commands"], ["-nl"], task)
+            self.assertEqual(simple_plan(task)["commands"], ["-logo"], task)
 
     def test_mute_aliases_disable_audio(self):
         for task in ("убить звук", "замьютить", "убрать звук", "сделать тишину", "мьют", "mute"):

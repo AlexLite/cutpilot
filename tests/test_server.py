@@ -22,7 +22,7 @@ class LogoIntentTests(unittest.TestCase):
 
     def test_overlay_logo_request_keeps_overlay_command(self):
         raw = {"commands": ["-nologo"], "summary": "overlay"}
-        self.assertEqual(_correct_logo_intent(raw, "приклей лого")["commands"], ["-nl"])
+        self.assertEqual(_correct_logo_intent(raw, "приклей лого")["commands"], ["-logo"])
 
     def test_negative_logo_request_is_not_changed(self):
         raw = {"commands": ["-nologo"], "summary": "remove"}
@@ -32,6 +32,8 @@ class LogoIntentTests(unittest.TestCase):
         raw = {"commands": ["-crp-00.15-00.50", "-crp-01.25-02.13", "-nl"], "summary": "cut"}
         corrected = _correct_edit_intent(raw, "склей 0.15-0.50+1.25-2.13 и наложи лого")
         self.assertEqual(corrected["commands"], ["-crp+00.15-00.50+01.25-02.13", "-nl"])
+        corrected = _correct_logo_intent(corrected, "склей 0.15-0.50+1.25-2.13 и наложи лого")
+        self.assertEqual(corrected["commands"], ["-crp+00.15-00.50+01.25-02.13", "-logo"])
 
     def test_remove_request_combines_multiple_edit_commands(self):
         raw = {"commands": ["-crp-00.00-00.15", "-crp-02.50-03.00"], "summary": "remove"}

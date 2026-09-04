@@ -138,7 +138,7 @@ def validate_commands(commands: object) -> tuple[str, ...]:
                 raise CommandValidationError("Only one edit command is allowed")
             _validate_edit(command)
             edit_seen = True
-        elif command in {"-nl", "-nologo", "-nc", "-nocut", "-mute", "-hevc"}:
+        elif command in {"-logo", "-nl", "-nologo", "-nc", "-nocut", "-mute", "-hevc"}:
             pass
         elif command in {"-mp4", "-mov"}:
             if container is not None:
@@ -283,7 +283,7 @@ def build_russian_summary(source_filename: str, commands: tuple[str, ...]) -> st
             parts.append("пересчитать в MOV")
         elif command == "-hevc":
             parts.append("использовать кодек HEVC")
-        elif command in {"-nl"}:
+        elif command in {"-logo"}:
             parts.append("наложить логотип")
         elif command == "-nologo":
             parts.append("убрать логотип")

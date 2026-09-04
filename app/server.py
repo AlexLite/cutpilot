@@ -61,13 +61,13 @@ def _correct_logo_intent(raw: Any, task: str) -> Any:
     positive = bool(re.search(r"(?:с|c|оставь|оставить|keep|with)\s*(?:лого|логотип|logo)", lowered))
     negative = bool(re.search(r"(?:без|убери|убрать|удали|удалить|remove)\s*(?:лого|логотип)", lowered))
     if overlay and not negative:
-        commands = [command for command in raw["commands"] if command != "-nologo"]
-        if "-nl" not in commands:
-            commands.append("-nl")
+        commands = [command for command in raw["commands"] if command not in {"-logo", "-nl", "-nologo"}]
+        if "-logo" not in commands:
+            commands.append("-logo")
     elif positive and not negative:
         commands = [command for command in raw["commands"] if command not in {"-nl", "-nologo"}]
     else:
-        commands = [command for command in raw["commands"] if command != "-nl"]
+        commands = [command for command in raw["commands"] if command not in {"-logo", "-nl"}]
         if "-nologo" not in commands:
             commands.append("-nologo")
     if commands != raw["commands"]:
