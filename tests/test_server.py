@@ -14,11 +14,11 @@ class LogoIntentTests(unittest.TestCase):
 
     def test_positive_logo_request_removes_no_logo_command(self):
         raw = {"commands": ["-nologo"], "summary": "remove"}
-        self.assertEqual(_correct_logo_intent(raw, "просчитай с лого")["commands"], [])
+        self.assertEqual(_correct_logo_intent(raw, "просчитай с лого")["commands"], ["-logo"])
 
     def test_latin_c_logo_request_removes_no_logo_command(self):
         raw = {"commands": ["-nl"], "summary": "overlay"}
-        self.assertEqual(_correct_logo_intent(raw, "перекодируй в mov c лого")["commands"], [])
+        self.assertEqual(_correct_logo_intent(raw, "перекодируй в mov c лого")["commands"], ["-logo"])
 
     def test_overlay_logo_request_keeps_overlay_command(self):
         raw = {"commands": ["-nologo"], "summary": "overlay"}

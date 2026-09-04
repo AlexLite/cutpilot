@@ -34,7 +34,7 @@ class OpenRouterAdapter:
             "the first 10 seconds is exactly -crp-00.00-00.10; never use -crp-0-10 or colons. "
             "Never return placeholders such as N, START, END, <number>, or angle brackets literally. "
             "Size examples: 'сожми до 100 Мб' -> '-100mb'; 'сожми до 2 Гб' -> '-2gb'. "
-            "Logo semantics: 'с лого' or 'оставь логотип' means keep the existing logo and emit neither -logo nor -nologo; "
+            "Logo semantics: 'с лого' or 'оставь логотип' is an explicit request to add the logo and means -logo; "
             "'наложи/добавь логотип' means emit -logo; 'без лого' or 'убери логотип' means emit -nologo. "
             "'убить звук', 'замьютить', 'убрать звук', 'сделать тишину', 'мьют' or 'mute' means emit -mute. "
             "Edit example: 'обрежь 1.25-1.55' -> '-crp-01.25-01.55'. "

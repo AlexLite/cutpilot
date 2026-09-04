@@ -53,7 +53,7 @@ class _RateLimiter:
 
 
 def _correct_logo_intent(raw: Any, task: str) -> Any:
-    """Remove logos by default; preserve one only for an explicit positive request."""
+    """Remove logos for AI_Cut jobs; add one only for an explicit request."""
     if not isinstance(raw, dict) or not isinstance(raw.get("commands"), list):
         return raw
     lowered = task.casefold()
@@ -65,7 +65,8 @@ def _correct_logo_intent(raw: Any, task: str) -> Any:
         if "-logo" not in commands:
             commands.append("-logo")
     elif positive and not negative:
-        commands = [command for command in raw["commands"] if command not in {"-nl", "-nologo"}]
+        commands = [command for command in raw["commands"] if command not in {"-logo", "-nl", "-nologo"}]
+        commands.append("-logo")
     else:
         commands = [command for command in raw["commands"] if command not in {"-logo", "-nl"}]
         if "-nologo" not in commands:

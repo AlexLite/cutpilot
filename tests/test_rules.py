@@ -12,7 +12,7 @@ class RulePlanTests(unittest.TestCase):
 
     def test_concat_ranges_are_normalized_locally(self):
         plan = simple_plan("склей 0.15-0.50+1.25-2.13 и оставь лого")
-        self.assertEqual(plan["commands"], ["-crp+0.15-0.50+1.25-2.13"])
+        self.assertEqual(plan["commands"], ["-logo", "-crp+0.15-0.50+1.25-2.13"])
 
     def test_collect_ranges_means_concatenate(self):
         plan = simple_plan("собери 0.16-0.25+1.20-1.25 пересчитай в mov и наложи лого")
@@ -40,10 +40,10 @@ class RulePlanTests(unittest.TestCase):
         self.assertEqual(simple_plan("уменьши до 100 Мб")["commands"], ["-100mb"])
 
     def test_reencode_to_mov_with_logo_is_understood(self):
-        self.assertEqual(simple_plan("перекодируй в mov с лого")["commands"], ["-mov"])
+        self.assertEqual(simple_plan("перекодируй в mov с лого")["commands"], ["-mov", "-logo"])
 
     def test_latin_c_before_logo_means_keep_logo(self):
-        self.assertEqual(simple_plan("перекодируй в mov c лого")["commands"], ["-mov"])
+        self.assertEqual(simple_plan("перекодируй в mov c лого")["commands"], ["-mov", "-logo"])
 
     def test_overlay_logo_synonyms_are_explicit(self):
         for task in ("добавь лого", "приклей лого"):
